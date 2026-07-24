@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RepoReaver Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;padding:0}
+nav{background:#161b22;border-bottom:1px solid #30363d;padding:12px 24px;display:flex;justify-content:space-between;align-items:center}
+nav h1{color:#58a6ff;font-size:20px}
+nav .ver{color:#8b949e;font-size:12px}
+.container{max-width:1200px;margin:0 auto;padding:24px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px}
+.stat-card .num{font-size:32px;font-weight:700}
+.stat-card .lbl{font-size:12px;color:#8b949e;margin-top:4px}
+.stat-card.danger .num{color:#f85149}
+.stat-card.warn .num{color:#d29922}
+.stat-card.info .num{color:#58a6ff}
+.scan-list{display:flex;flex-direction:column;gap:8px}
+.scan-row{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:border-color .15s}
+.scan-row:hover{border-color:#58a6ff}
+.scan-row .left{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.scan-row .target{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scan-row .time{font-size:12px;color:#8b949e}
+.scan-row .sev{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;text-transform:uppercase}
+.sev-critical{background:#f8514920;color:#f85149;border:1px solid #f8514940}
+.sev-high{background:#d2992220;color:#d29922;border:1px solid #d2992240}
+.sev-medium{background:#58a6ff20;color:#58a6ff;border:1px solid #58a6ff40}
+.sev-low{background:#3fb95020;color:#3fb950;border:1px solid #3fb95040}
+.sev-info{background:#8b949e20;color:#8b949e;border:1px solid #8b949e40}
+.detail-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;margin-top:12px;padding:20px;display:none}
+.detail-panel.open{display:block}
+.detail-panel h3{color:#f0f6fc;margin-bottom:12px}
+.detail-panel .finding{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;margin:8px 0}
+.detail-panel .finding .title{font-weight:600;color:#f0f6fc}
+.detail-panel .finding .desc{font-size:13px;color:#c9d1d9;margin:6px 0}
+.detail-panel .finding .meta{font-size:11px;color:#8b949e}
+.loading{text-align:center;padding:40px;color:#8b949e}
+.empty{text-align:center;padding:60px;color:#8b949e}
+.empty h2{color:#f0f6fc;margin-bottom:8px}
+.badge{font-size:10px;padding:2px 6px;border-radius:3px;background:#21262d;color:#8b949e;margin-left:6px}
+.hidden{display:none}
+.tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #30363d}
+.tab{padding:10px 20px;cursor:pointer;color:#8b949e;border-bottom:2px solid transparent;font-size:14px}
+.tab.active{color:#f0f6fc;border-bottom-color:#58a6ff}
+</style>
+</head>
+<body>
+<nav>
+  <h1>RepoReaver Dashboard</h1>
+  <span class="ver">v{{VERSION}}</span>
+</nav>
+<div class="container">
+  <div class="stats" id="stats"></div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('all')">All Scans</div>
+    <div class="tab" onclick="showTab('critical')">Critical</div>
+    <div class="tab" onclick="showTab('high')">High Risk</div>
+  </div>
+  <div id="scan-list" class="scan-list"><div class="loading">Loading...</div></div>
+  <div id="detail-panel" class="detail-panel"></div>
+</div>
+
+<script>
+let scans = [];
+let filterSev = null;
+
+function showTab(t) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.textContent.toLowerCase().includes(t) || (t==='all' && el.textContent==='All Scans')));
+  filterSev = t === 'all' ? null : t;
+  renderList();
+}
+
+async function load() {
+  const [sRes, statsRes] = await Promise.all([
+    fetch('/api/scans?limit=100'),
+    fetch('/api/stats')
+  ]);
+  const sData = await sRes.json();
+  const stats = await statsRes.json();
+  scans = sData.scans || [];
+  renderStats(stats);
+  renderList();
+}
+
+function renderStats(s) {
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card info">
+      <div class="num">${s.total_scans || 0}</div>
+      <div class="lbl">Total Scans</div>
+    </div>
+    <div class="stat-card ${s.avg_risk_score >= 7 ? 'danger' : s.avg_risk_score >= 4 ? 'warn' : 'info'}">
+      <div class="num">${s.avg_risk_score || 0}</div>
+      <div class="lbl">Avg Risk Score</div>
+    </div>
+    ${s.worst ? `
+    <div class="stat-card danger">
+      <div class="num">${s.worst.risk_score}</div>
+      <div class="lbl">Worst: ${s.worst.target.split('/').pop()}</div>
+    </div>` : ''}
+  `;
+}
+
+function renderList() {
+  const filtered = filterSev ? scans.filter(s => s.max_sev === filterSev) : scans;
+  const container = document.getElementById('scan-list');
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty"><h2>No scans yet</h2><p>Run reporeaver scan ./some-repo to see results here</p></div>';
+    return;
+  }
+  container.innerHTML = filtered.map(s => {
+    const sev = s.max_sev || 'info';
+    const target = (s.target || '').split('/').pop() || s.target;
+    const time = s.scan_time ? new Date(s.scan_time).toLocaleString() : '?';
+    return `<div class="scan-row" onclick="showDetail(${s.id})">
+      <div class="left">
+        <span class="sev sev-${sev}">${sev}</span>
+        <span class="target">${target}</span>
+        <span class="time">${time}</span>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;font-size:13px;color:#8b949e">
+        <span>${s.risk_score}/10</span>
+        <span>${s.files_count || 0} files</span>
+        <span>${s.duration_ms ? (s.duration_ms/1000).toFixed(1)+'s' : ''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function showDetail(id) {
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = '<div class="loading">Loading...</div>';
+  panel.classList.add('open');
+  const res = await fetch(`/api/scans/${id}`);
+  const s = await res.json();
+  if (s.error) {
+    panel.innerHTML = '<p style="color:#f85149">Scan not found</p>';
+    return;
+  }
+  let findings = [];
+  try { findings = JSON.parse(s.findings || '[]'); } catch(e) {}
+  const target = s.target || '?';
+  const time = s.scan_time ? new Date(s.scan_time).toLocaleString() : '?';
+  const sev = s.max_sev || 'info';
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start">
+      <div>
+        <h3>${target}</h3>
+        <p style="color:#8b949e;font-size:13px">${time} &middot; ${s.files_count} files &middot; ${s.duration_ms ? (s.duration_ms/1000).toFixed(1)+'s' : ''}</p>
+      </div>
+      <div style="text-align:right">
+        <span class="sev sev-${sev}" style="font-size:13px">${sev.toUpperCase()}</span>
+        <div style="font-size:24px;font-weight:700;margin-top:4px;color:${sev==='critical'?'#f85149':sev==='high'?'#d29922':'#58a6ff'}">${s.risk_score}/10</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin:12px 0;font-size:13px;color:#8b949e">
+      <span>Critical: ${s.critical || 0}</span>
+      <span>High: ${s.high || 0}</span>
+      <span>Medium: ${s.medium || 0}</span>
+      <span>Low: ${s.low || 0}</span>
+    </div>
+    ${findings.length ? findings.map(f => `
+      <div class="finding">
+        <div class="title"><span class="sev sev-${f.severity||'info'}" style="margin-right:8px">${f.severity||'?'}</span>${f.title||'?'}</div>
+        <div class="meta">${f.file||'?'}${f.line ? ', line '+f.line : ''}</div>
+        ${f.description ? `<div class="desc">${f.description}</div>` : ''}
+        ${f.attack_path ? `<div class="desc" style="color:#d29922">Chain: ${f.attack_path}</div>` : ''}
+      </div>
+    `).join('') : '<p style="color:#8b949e">No findings</p>'}
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button onclick="document.getElementById('detail-panel').classList.remove('open')" style="padding:8px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer">Close</button>
+    </div>
+  `;
+}
+
+load();
+</script>
+</body>
+</html>

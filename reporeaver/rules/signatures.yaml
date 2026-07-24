@@ -1,0 +1,50 @@
+# reporeaver detection signatures
+# Extensible pattern database
+
+svg:
+  event_handlers:
+    - onload
+    - onerror
+    - onmouseover
+    - onclick
+    - onfocus
+    - onblur
+  suspicious_elements:
+    - script
+    - foreignObject
+  obfuscation_patterns:
+    - String.fromCharCode
+    - eval(
+    - atob(
+    - btoa(
+    - escape(
+    - unescape(
+    - \\x[0-9a-fA-F]{2}
+    - \\u[0-9a-fA-F]{4}
+    - _0x[0-9a-fA-F]{4}
+
+npm_lifecycle:
+  high_risk_hooks:
+    - postinstall
+    - preinstall
+    - install
+
+suspicious_tlds:
+  - .tk
+  - .ml
+  - .ga
+  - .cf
+  - .gq
+  - .pw
+  - .top
+  - .work
+  - .click
+  - .download
+  - .stream
+
+c2_indicators:
+  - pastebin.com
+  - raw.githubusercontent.com
+  - ngrok.io
+  - serveo.net
+  - localtunnel.me

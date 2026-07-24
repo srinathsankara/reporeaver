@@ -1,0 +1,27 @@
+# RepoReaver default policy
+# Findings at or above severity_threshold cause CI failure
+severity_threshold: high
+
+# Auto-block these categories at any severity
+block_categories:
+  - c2_callback
+  - credential_theft
+  - ci_remote_exec
+  - behavioral_exfil
+  - encoded_payload
+  - svg_xxe
+  - mime_mismatch
+  - polyglot_file
+
+# Paths to ignore (prefix match)
+allow_paths:
+  - "node_modules/"
+  - ".git/"
+  - "__pycache__/"
+  - "vendor/"
+  - ".venv/"
+
+# Per-category severity overrides
+severity_overrides:
+  lifecycle_hook: low
+  unpinned_action: medium

