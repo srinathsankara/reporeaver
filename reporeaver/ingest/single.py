@@ -1,10 +1,13 @@
 """Ingesters for single files, directories, and archives (including nested)."""
 
 import hashlib
+import logging
 import tarfile
 import zipfile
 from pathlib import Path
 from typing import List, Optional, Set
+
+log = logging.getLogger("reporeaver.ingest")
 
 from ..models import FileEntry
 from ..utils.mime_detect import guess_mime
@@ -105,14 +108,14 @@ def _ingest_zip(path: Path, depth: int = 0) -> IngestResult:
                         nested = _extract_archive_bytes(raw, name, depth + 1)
                         files.extend(nested.files)
                         continue
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.debug("Nested zip extract failed for %s: %s", name, exc)
                 mime = guess_mime(name)
                 entry = _build_entry(name, info.file_size, mime, ext)
                 if entry:
                     files.append(entry)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Zip ingest failed for %s: %s", path, exc)
     return IngestResult(files=files, source_type="zip", source_path=str(path))
 
 
@@ -140,14 +143,14 @@ def _ingest_tar(path: Path, depth: int = 0) -> IngestResult:
                         nested = _extract_archive_bytes(raw, name, depth + 1)
                         files.extend(nested.files)
                         continue
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.debug("Nested tar extract failed for %s: %s", name, exc)
                 mime = guess_mime(name)
                 entry = _build_entry(name, member.size, mime, ext)
                 if entry:
                     files.append(entry)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Tar ingest failed for %s: %s", path, exc)
     return IngestResult(files=files, source_type="tar", source_path=str(path))
 
 
@@ -176,8 +179,9 @@ def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
                     if entry:
                         files.append(entry)
                 return IngestResult(files=files, source_type="nested_zip")
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Nested zip bytes extract failed: %s", exc)
+
     # Try nested tar
     if len(data) > 2:
         try:
@@ -198,8 +202,8 @@ def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
                     if entry:
                         files.append(entry)
                 return IngestResult(files=files, source_type="nested_tar")
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Nested tar bytes extract failed: %s", exc)
     return IngestResult(source_type="nested_unknown")
 
 
@@ -225,8 +229,8 @@ def _build_entry(fpath: str, size: int, mime: str, ext: str,
                 for chunk in iter(lambda: f.read(65536), b""):
                     h.update(chunk)
             hash_val = h.hexdigest()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Hash computation failed for %s: %s", disk_path, exc)
 
     return FileEntry(
         path=fpath,

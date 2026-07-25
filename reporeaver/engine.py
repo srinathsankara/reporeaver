@@ -2,11 +2,14 @@
 
 import concurrent.futures
 import json
+import logging
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+log = logging.getLogger("reporeaver.engine")
 
 from .analyzers import BaseAnalyzer, all_analyzers
 from .analyzers.svg_analyzer import SVGVectorAnalyzer
@@ -72,6 +75,9 @@ def scan_target(
       - caching: skip files whose SHA-256 hasn't changed since last scan
       - progress bar: prints a running tally as files are analyzed
     """
+    from .logging import get_logger
+    get_logger()  # init file logging
+
     start = time.time()
     target_path = Path(target)
 
@@ -143,8 +149,8 @@ def scan_target(
                     if full.exists() and full.stat().st_size <= max_size_mb * 1024 * 1024:
                         content = full.read_text(encoding="utf-8", errors="replace")
                         raw_bytes = content.encode("utf-8", errors="replace")
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("File read error %s: %s", entry.path, exc)
 
             # Submit per-file analysis jobs (one per file, all applicable analyzers run inline)
             fut = pool.submit(_analyze_file, entry, content, raw_bytes, text_analyzers, binary_analyzers)
@@ -231,8 +237,8 @@ def scan_target(
                 sarif_path=sarif_output,
                 html_path=html_output,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("Failed to save scan history: %s", exc)
 
     return 1 if risk.score >= 7.0 else 0
 
@@ -249,16 +255,16 @@ def _analyze_file(entry: FileEntry, content: str, raw: bytes,
             try:
                 res = a.analyze(entry, content)
                 all_findings.extend(res.findings)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Analyzer %s failed on %s: %s", a.name, entry.path, exc)
 
     if raw and binary_analyzers:
         for a in binary_analyzers:
             try:
                 res = a.analyze_binary(entry, raw)
                 all_findings.extend(res.findings)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Binary analyzer %s failed on %s: %s", a.name, entry.path, exc)
 
     return (all_findings, entry.hash_sha256)
 
@@ -288,8 +294,8 @@ def _git_changed_files(repo_path: Path) -> Optional[set]:
         )
         if result.returncode == 0 and result.stdout.strip():
             return set(line.strip() for line in result.stdout.splitlines() if line.strip())
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Git diff origin/main...HEAD failed: %s", exc)
 
     # If origin/main doesn't exist (new branch), return unstaged changes
     try:
@@ -299,8 +305,8 @@ def _git_changed_files(repo_path: Path) -> Optional[set]:
         )
         if result.returncode == 0 and result.stdout.strip():
             return set(line.strip() for line in result.stdout.splitlines() if line.strip())
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Git diff HEAD failed: %s", exc)
 
     return None
 
@@ -332,7 +338,8 @@ def _load_cache(hash_key: str) -> Optional[List[Finding]]:
     try:
         data = json.loads(cache_file.read_text(encoding="utf-8"))
         return [Finding(**f) for f in data]
-    except Exception:
+    except Exception as exc:
+        log.debug("Cache load failed for %s: %s", hash_key[:16], exc)
         return None
 
 
@@ -344,8 +351,8 @@ def _save_cache(hash_key: str, findings: List[Finding]):
             json.dumps([f.to_dict() for f in findings], default=str),
             encoding="utf-8",
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Cache save failed for %s: %s", hash_key[:16], exc)
 
 
 def _prune_cache(max_entries: int = 10000):
@@ -355,8 +362,8 @@ def _prune_cache(max_entries: int = 10000):
         while len(entries) > max_entries:
             entries[0].unlink()
             entries = entries[1:]
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Cache prune error: %s", exc)
 
 
 def _fmt_size(b: int) -> str:

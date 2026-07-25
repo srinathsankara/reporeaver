@@ -1,74 +1,126 @@
-# RepoReaver 🔍
+# RepoReaver
 
-**Open-source security gate for repositories, archives, and dependency trees.**
+**Pre-clone repo security scanner.** Answers one question: *"Can this codebase safely be cloned, reviewed, built, or executed?"*
 
-Answers one question: *"Can this codebase safely be cloned, reviewed, built, or executed?"*
-
-[![Tests](https://github.com/reporeaver/reporeaver/actions/workflows/ci.yml/badge.svg)](https://github.com/reporeaver/reporeaver/actions)
+[![CI](https://github.com/srinathsankara/reporeaver/actions/workflows/ci.yml/badge.svg)](https://github.com/srinathsankara/reporeaver/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 ---
 
-## The Problem
-
-Attackers hide malware in files that look harmless:
-
-- **SVG architectural diagrams** with obfuscated JavaScript that phones home
-- **Build scripts** (`postinstall`) that download and execute remote payloads
-- **Unicode tricks** (zero-width chars, bidi overrides, homoglyphs) that hide code in plain sight
-- **File-type deception** — SVGs named `.png`, polyglot files that pass extension-based filters
-- **CI/CD abuse** — unpinned actions, secrets exfiltration, remote script execution in pipelines
-- **Dependency attacks** — URL-resolved packages, postinstall chains, version string injection
-
-This was an actual Upwork attack vector: a fake contracting job with a malicious SVG in the repo diagram.
-
-## Features
-
-| Analyzer | Capability |
-|----------|------------|
-| **SVG Vector** | XXE, obfuscated `<script>` blocks, inline event handlers, data URIs, foreign objects, `javascript:` URIs, base64 payloads |
-| **Unicode** | Zero-width characters, bidi overrides (Trojan Source), homoglyph attacks, invisible Unicode |
-| **Script** | `postinstall`/`preinstall` hooks, `curl | bash`, credential theft, remote downloads |
-| **Dependency** | URL-resolved packages, shell metacharacters in versions, postinstall chains |
-| **Workflow/CI** | Unpinned actions, remote exec in CI, secrets exposure, scheduled triggers |
-| **Entropy** | Base64/hex encoded strings, high-entropy obfuscation detection |
-| **URL/Network** | C2 callbacks, suspicious TLDs, raw IP targets, known C2 infrastructure |
-| **MIME/Type** | Extension mismatch, polyglot files, SVG/script in image extensions |
-| **Behavioral** | Network behavior, code execution, persistence, data exfiltration |
-
 ## Quick Start
-
-### Install
 
 ```bash
 pip install reporeaver
+reporeaver scan ./suspicious-repo
+reporeaver scan project.zip --html report.html --sarif results.sarif
 ```
 
-### Scan a Repository
+## What It Catches
+
+| Category | Threats Detected |
+|----------|-----------------|
+| **SVG** | XXE, obfuscated JS in `<script>`, inline event handlers, data URIs, foreign objects, `javascript:` URIs, base64 payloads, C2 callbacks |
+| **Hardcoded Secrets** | AWS keys, GitHub PATs, Slack tokens, private keys, JWTs, DB connection strings, OpenAI keys, 20+ provider patterns |
+| **Unicode** | Zero-width chars, bidi overrides (Trojan Source CVE-2021-42574), homoglyph attacks, invisible chars in filenames |
+| **Dependencies** | Typo-squatting (edit-distance vs 50+ packages), URL-resolved packages, lockfile tampering, dependency confusion, postinstall chains |
+| **Build Scripts** | `setup.py` `cmdclass`/`os.system`, `Cargo.toml` git deps/`build.rs`, `Dockerfile` `FROM latest`/`curl|bash`/`ADD URL`, `Makefile` abuse |
+| **CI/CD** | Unpinned actions, remote exec, secrets exposure, self-hosted runners, artifact chains, reusable workflows, cron persistence |
+| **Binary** | WASM dangerous imports (emscripten_run_script, network), YARA rules (reverse shell, webshell, PowerShell encoded) |
+| **Behavioral** | Network C2, code execution, persistence, data exfiltration patterns |
+| **File Deception** | Extension mismatches, polyglot files, SVG/script in image extensions |
+| **Obfuscation** | Base64/hex encoding, high entropy, layered encodings, JS string obfuscation |
+
+## Installation
 
 ```bash
-# Basic scan
-reporeaver scan ./suspicious-repo
+# Core (includes YAML policy support)
+pip install reporeaver
 
-# Full report with HTML dashboard and SARIF
-reporeaver scan ./suspicious-repo --html report.html --sarif results.sarif --verbose
+# With dashboard server
+pip install reporeaver[dashboard]
 
-# JSON output
-reporeaver scan ./suspicious-repo --json
+# Everything
+pip install reporeaver[all]
 
-# Scan an archive without extracting
-reporeaver scan attacker-code.zip --html report.html
+# From source
+git clone https://github.com/srinathsankara/reporeaver.git
+cd reporeaver
+pip install -e ".[all]"
 ```
 
-### GitHub Action (1-minute setup)
+## Usage
 
-Create `.github/workflows/reporeaver.yml`:
+### Scan Commands
+
+```bash
+reporeaver scan ./repo                          # Basic scan
+reporeaver scan ./repo --verbose                 # Include medium-severity findings
+reporeaver scan archive.zip --html report.html   # Scan archive, generate HTML dashboard
+reporeaver scan . --diff-only                    # Only scan files changed in this branch
+reporeaver scan . --skip entropy,behavioral      # Disable specific analyzers
+reporeaver scan . --no-cache                     # Disable content-based caching
+reporeaver scan . --policy my-policy.yaml        # Custom policy file
+```
+
+### Output Formats
+
+```bash
+reporeaver scan ./repo --json                    # Machine-readable JSON
+reporeaver scan ./repo --sarif results.sarif     # SARIF (GitHub Security tab)
+reporeaver scan ./repo --html report.html        # Self-contained HTML dashboard
+```
+
+### View History
+
+```bash
+reporeaver history --last 20                     # Recent scans
+reporeaver history --stats                       # Aggregate stats
+reporeaver history --delete 3                    # Delete a scan record
+```
+
+### Dashboard Server
+
+```bash
+reporeaver dashboard                             # Launch at http://127.0.0.1:9520
+
+# With auth token
+REPOREAVER_DASHBOARD_TOKEN=my-secret reporeaver dashboard
+
+# Custom host/port
+reporeaver dashboard --host 0.0.0.0 --port 9000
+```
+
+### Pre-commit Hook
+
+```bash
+reporeaver init-precommit                        # Installs hook into .git/hooks/
+# Runs on staged files before every commit. Bypass with: git commit --no-verify
+```
+
+### Configuration Files
+
+RepoReaver auto-discovers these config files in order:
+1. `./reporeaver.yaml`
+2. `./.reporeaver.yaml`
+3. `~/.config/reporeaver/config.yaml`
+
+Example `reporeaver.yaml`:
+```yaml
+severity_threshold: high
+skip_analyzers:
+  - entropy
+  - yara
+max_size_mb: 5
+policy: my-policy.yaml
+```
+
+## GitHub Action
 
 ```yaml
+# .github/workflows/reporeaver.yml
 name: RepoReaver Security Gate
 on: [push, pull_request]
-
 jobs:
   security-scan:
     runs-on: ubuntu-latest
@@ -78,88 +130,72 @@ jobs:
         with:
           target: .
           severity-threshold: high
+          diff-only: true
+          github-token: ${{ github.token }}
 ```
 
 The Action:
 - Fails CI if risk score exceeds threshold
+- Posts a GitHub Check Run with score and summary
 - Uploads SARIF to GitHub Security tab
-- Attaches HTML dashboard as a workflow artifact
+- Attaches HTML/JSON/SARIF as workflow artifacts
 
-### Pre-commit Hook
+## Docker
 
-```yaml
-# .pre-commit-config.yaml
-- repo: https://github.com/reporeaver/reporeaver
-  rev: v0.2.0
-  hooks:
-    - id: reporeaver
-      args: ["scan", "."]
+```bash
+docker build -t reporeaver .
+docker run --rm -v $(pwd):/scan reporeaver scan /scan
+docker run --rm -v $(pwd):/scan reporeaver scan /scan --html /scan/report.html
 ```
 
 ## Architecture
 
 ```
 reporeaver/
-├── cli.py              # CLI entry point
-├── engine.py           # Scanning orchestrator
-├── models.py           # Finding, RiskScore, FileEntry, ScanResult
-├── policy.py           # Policy engine (allow/deny rules)
-├── analyzers/          # Plugin-based detection modules
-│   ├── svg_analyzer.py
-│   ├── unicode_analyzer.py
-│   ├── script_analyzer.py
-│   ├── dep_analyzer.py
-│   ├── workflow_analyzer.py
-│   ├── entropy_analyzer.py
-│   ├── url_analyzer.py
-│   ├── mime_analyzer.py
-│   └── behavioral_analyzer.py
-├── deobfuscation/      # Decode layered encodings
-├── ingest/             # File, directory, archive, git ingest
-├── output/             # Report, SARIF, HTML dashboard
-└── utils/              # MIME detection, sandbox
-```
-
-## Output Formats
-
-- **Terminal**: Colorized severity-grouped report
-- **JSON**: Machine-readable for CI and tooling
-- **SARIF**: GitHub-native — results appear in Security tab
-- **HTML**: Self-contained dashboard — open from any browser (no server needed)
-
-## Example Output
-
-```
-  ============================================================
-  REPOREAVER — SECURITY GATE REPORT
-  Target: ./suspect-repo
-  ============================================================
-
-  RISK SCORE: 7.5 / 10.0  (critical)
-  2 critical, 3 high, 1 medium, 0 low
-
-  ------------------------------------------------------------
-  CRITICAL FINDINGS (2)
-  ------------------------------------------------------------
-
-  [!] SVG contains XML External Entity (XXE) declaration
-    File: docs/architecture.svg
-    Attack chain: SVG parsing -> XXE expansion -> file read
-
-  [!] SVG script uses 'eval(' — arbitrary code execution risk
-    File: docs/architecture.svg, line 10
-    Attack chain: SVG script -> eval -> remote code execution
-    Decoded: var xhr=new XMLHttpRequest();xhr.open("GET",...
+├── cli.py                 # argparse CLI: scan, dashboard, history, init-precommit
+├── engine.py              # Orchestrator: ingest -> analyze -> score -> output
+├── models.py              # Finding, RiskScore, FileEntry, ScanResult
+├── policy.py              # YAML policy engine (allow/block/severity)
+├── config.py              # Auto-discover reporeaver.yaml
+├── logging.py             # Structured logging to file + console
+├── history.py             # SQLite scan history (for dashboard)
+├── feeds.py               # OSV, MalwareBazaar, C2 threat feed integration
+├── hooks.py               # Pre-commit hook installer
+├── analyzers/             # 15 plugin-based detection modules
+│   ├── base.py            # Plugin base class + registry
+│   ├── svg_analyzer.py, unicode_analyzer.py, secrets_analyzer.py, ...
+├── deobfuscation/         # Unicode, encoding, JS deobfuscation
+├── ingest/                # File, directory, archive (recursive) ingest
+├── output/                # Report, SARIF, HTML dashboard
+├── ui/                    # FastAPI dashboard server
+└── utils/                 # MIME detection, sandbox
 ```
 
 ## Security Model
 
-- **Never executes repository code on host**
-- Offline by default — no remote fetch
-- All analysis is static (AST, regex, entropy)
-- Sandboxed temp directory for archive extraction
-- Plugin architecture for custom analyzers
+- **Never executes repo code on host** — all analysis is static
+- **Offline by default** — threat feeds are opt-in, cached locally
+- **Sandboxed extraction** — archives extracted to isolated temp dirs
+- **No shell injection** — all `subprocess.run()` calls use list form, never `shell=True`
+- **Safe YAML** — uses `yaml.safe_load()`, not `yaml.load()`
+- **Minimal dependencies** — core requires only `pyyaml`
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Pass — risk score below threshold (no critical/high findings) |
+| 1 | Fail — risk score >= 7.0 or policy violations found |
+
+## Development
+
+```bash
+git clone https://github.com/srinathsankara/reporeaver.git
+cd reporeaver
+pip install -e ".[dev]"
+python -m pytest tests/ -v
+```
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
