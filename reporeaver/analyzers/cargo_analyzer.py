@@ -2,8 +2,11 @@
 
 import configparser
 import io
+import logging
 import re
 from typing import List
+
+log = logging.getLogger("reporeaver.cargo")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -32,9 +35,8 @@ def _check_cargo_toml(content: str, path: str) -> AnalyzerResult:
     try:
         cfg = configparser.ConfigParser()
         cfg.read_string(content)
-    except Exception:
-        # configparser may choke on TOML (TOML != INI) — catch and do regex fallback
-        pass
+    except Exception as exc:
+        log.debug("configparser failed on TOML (expected), falling back to regex: %s", exc)
 
     # Check for git dependencies (unpinned)
     for match in re.finditer(r'(?:git|repository)\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE):

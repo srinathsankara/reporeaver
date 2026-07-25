@@ -30,7 +30,7 @@ setup(
     ],
     extras_require={
         "dashboard": ["fastapi>=0.100", "uvicorn>=0.20", "jinja2>=3.0"],
-        "all": ["pyyaml>=5.0", "fastapi>=0.100", "uvicorn>=0.20", "jinja2>=3.0"],
+        "all": ["fastapi>=0.100", "uvicorn>=0.20", "jinja2>=3.0"],
         "dev": ["pytest>=7.0", "pytest-cov>=4.0"],
     },
     classifiers=[

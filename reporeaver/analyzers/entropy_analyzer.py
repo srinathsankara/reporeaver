@@ -1,9 +1,12 @@
 """Entropy Analyzer — detects high-entropy/encoded strings that may hide payloads."""
 
+import logging
 import math
 import re
 import string
 from typing import Dict, List, Optional
+
+log = logging.getLogger("reporeaver.entropy")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -87,14 +90,14 @@ def _try_decode(data: str) -> Optional[str]:
         decoded = base64.b64decode(data).decode("utf-8", errors="replace")
         if any(c.isalpha() and c.isascii() for c in decoded[:200]):
             return decoded
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("base64 decode failed: %s", exc)
     try:
         decoded = bytes.fromhex(data).decode("utf-8", errors="replace")
         if any(c.isalpha() and c.isascii() for c in decoded[:200]):
             return decoded
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("hex decode failed: %s", exc)
     return None
 
 

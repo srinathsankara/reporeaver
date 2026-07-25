@@ -1,6 +1,7 @@
 """Ingesters for single files, directories, and archives (including nested)."""
 
 import hashlib
+import io
 import logging
 import tarfile
 import zipfile
@@ -158,8 +159,6 @@ def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
     """Extract a nested archive from raw bytes. Handles both zip and tar."""
     if depth >= 3:
         return IngestResult(source_type="nested_too_deep")
-    import io
-
     # Try nested ZIP
     if data[:2] == b"PK":
         try:
@@ -185,7 +184,6 @@ def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
     # Try nested tar
     if len(data) > 2:
         try:
-            import tarfile
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
                 files = []
                 for member in tar.getmembers():

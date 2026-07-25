@@ -1,9 +1,12 @@
 """URL/Network Analyzer — detects external callbacks, C2 indicators, and suspicious URLs."""
 
 import ipaddress
+import logging
 import re
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+
+log = logging.getLogger("reporeaver.url_network")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -93,7 +96,8 @@ class URLNetworkAnalyzer(BaseAnalyzer):
                      findings: List[Finding], context: str):
         try:
             parsed = urlparse(url)
-        except Exception:
+        except Exception as exc:
+            log.debug("urlparse failed for %s: %s", url, exc)
             return
         hostname = (parsed.hostname or "").lower()
 
@@ -166,8 +170,8 @@ class URLNetworkAnalyzer(BaseAnalyzer):
                     if hostname.lower() in SAFE_PACKAGE_REGISTRIES or \
                        any(hostname.lower().endswith("." + d) for d in SAFE_PACKAGE_REGISTRIES):
                         continue
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("urlparse failed for %s: %s", url, exc)
 
                 findings.append(Finding(
                     path, Severity.HIGH, Confidence.MEDIUM, Category.RUNTIME_NETWORK_CALL,

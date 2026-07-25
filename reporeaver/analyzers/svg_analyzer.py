@@ -1,12 +1,11 @@
-"""SVG analyzer — scripts, event handlers, XXE, data URIs, foreign objects.
-
-SVGs look like images but can contain active content. Attackers love them
-because nobody reads diagram files in code review.
-"""
+"""SVG analyzer — scripts, event handlers, XXE, data URIs, foreign objects."""
 
 import base64
+import logging
 import re
 from typing import List, Optional
+
+log = logging.getLogger("reporeaver.svg")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -284,14 +283,14 @@ def try_base64_decode(text: str) -> Optional[str]:
     for match in ATOB_B64.finditer(text):
         try:
             return base64.b64decode(match.group(2)).decode("utf-8", errors="replace")
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("atob decode failed: %s", exc)
     long_match = LONG_B64.search(text)
     if long_match:
         try:
             return base64.b64decode(long_match.group(1)).decode("utf-8", errors="replace")
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("base64 decode failed: %s", exc)
     return None
 
 

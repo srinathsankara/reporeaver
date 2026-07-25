@@ -1,15 +1,10 @@
-"""Auto-discovery of reporeaver.yaml config files.
+"""Auto-discovery of reporeaver.yaml config files."""
 
-Load order:
-  1. ./reporeaver.yaml (project root)
-  2. ./.reporeaver.yaml (dotfile variant)
-  3. ~/.config/reporeaver/config.yaml (user global)
-  4. CLI args (override all)
-"""
-
-import os
+import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
+log = logging.getLogger("reporeaver.config")
 
 CONFIG_PATHS = [
     "reporeaver.yaml",
@@ -19,7 +14,6 @@ CONFIG_PATHS = [
 
 
 def discover_config(target_dir: Optional[str] = None) -> Dict[str, Any]:
-    """Find and load the nearest config file. Returns parsed dict or empty."""
     search_dirs = []
     if target_dir:
         search_dirs.append(Path(target_dir))
@@ -32,8 +26,8 @@ def discover_config(target_dir: Optional[str] = None) -> Dict[str, Any]:
             if p.exists():
                 try:
                     return _load_yaml(p)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("failed to load %s: %s", p, exc)
     return {}
 
 

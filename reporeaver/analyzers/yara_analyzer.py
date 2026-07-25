@@ -1,17 +1,12 @@
-"""YARA rule engine — matches files against YARA rules for malware detection.
+"""YARA rule engine — matches files against YARA rules for malware detection."""
 
-Provides:
-  - Built-in rules (basic malware patterns)
-  - Custom rules from a provided directory or file
-  - yara-python integration (optional; works without it)
-
-Uses yara-python if installed; falls back to a simple regex-based engine.
-"""
-
+import logging
 import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+log = logging.getLogger("reporeaver.yara")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -141,8 +136,8 @@ class YaraAnalyzer(BaseAnalyzer):
                     remediation="Review the matched content. Quarantine if confirmed malicious.",
                     raw_value=m.rule,
                 ))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("yara match failed: %s", exc)
         return AnalyzerResult(findings)
 
     def _analyze_builtin(self, entry: FileEntry, content: str) -> AnalyzerResult:
@@ -165,8 +160,8 @@ class YaraAnalyzer(BaseAnalyzer):
                         line_number=line_no,
                         snippet=_trunc(content[max(0, match.start()-20):match.end()+40], 150),
                     ))
-            except re.error:
-                pass
+            except re.error as exc:
+                log.debug("regex error in rule %s: %s", rule.get("rule"), exc)
 
         return AnalyzerResult(findings)
 

@@ -1,8 +1,11 @@
 """JavaScript deobfuscation helpers — detect and decode obfuscated JS patterns."""
 
 import base64
+import logging
 import re
 from typing import List, Optional, Tuple
+
+log = logging.getLogger("reporeaver.deobfuscation.js")
 
 
 # Pattern: hex-encoded strings like \x48\x65\x6c\x6c\x6f
@@ -35,8 +38,8 @@ def find_obfuscated_strings(text: str) -> List[Tuple[str, int, str]]:
             if decoded.isprintable():
                 line_no = text[:match.start()].count("\n") + 1
                 results.append((decoded, line_no, "hex_escape"))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("hex escape decode failed: %s", exc)
 
     for match in UNICODE_STRING.finditer(text):
         raw = match.group(0)
@@ -45,8 +48,8 @@ def find_obfuscated_strings(text: str) -> List[Tuple[str, int, str]]:
             if decoded.isprintable():
                 line_no = text[:match.start()].count("\n") + 1
                 results.append((decoded, line_no, "unicode_escape"))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("unicode escape decode failed: %s", exc)
 
     for match in EVAL_B64.finditer(text):
         b64_data = match.group(1)
@@ -55,8 +58,8 @@ def find_obfuscated_strings(text: str) -> List[Tuple[str, int, str]]:
             if decoded:
                 line_no = text[:match.start()].count("\n") + 1
                 results.append((decoded, line_no, "eval_base64"))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("eval base64 decode failed: %s", exc)
 
     for match in FROM_CHARCODE.finditer(text):
         args = match.group(1)
@@ -66,8 +69,8 @@ def find_obfuscated_strings(text: str) -> List[Tuple[str, int, str]]:
             if decoded:
                 line_no = text[:match.start()].count("\n") + 1
                 results.append((decoded, line_no, "from_char_code"))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("fromCharCode decode failed: %s", exc)
 
     return results
 
