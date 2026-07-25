@@ -20,7 +20,7 @@ SUSPICIOUS_PATTERNS = [
     (r"(?:child_process|execSync|exec\s*\()", Severity.CRITICAL, "Node.js process execution"),
     (r"(?:fs\.writeFile|writeFileSync|appendFile|createWriteStream)", Severity.HIGH,
      "File write from script"),
-    (r"(?:chmod\s+777|chmod\s++x)", Severity.HIGH, "Permission modification"),
+    (r"(?:chmod\s+777|chmod\s+\+x)", Severity.HIGH, "Permission modification"),
     (r"(?:base64|atob|btoa|fromCharCode)", Severity.MEDIUM, "Encoding/obfuscation functions"),
     (r"(?:env\.(?:SECRET|TOKEN|KEY|PASS|CREDENTIAL))", Severity.CRITICAL,
      "Access to environment secrets"),

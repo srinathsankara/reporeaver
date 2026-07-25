@@ -4,9 +4,10 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 _LOG_DIR = Path.home() / ".reporeaver"
-_LOG: logging.Logger | None = None
+_LOG: Optional[logging.Logger] = None
 
 
 def get_logger(name: str = "reporeaver") -> logging.Logger:
