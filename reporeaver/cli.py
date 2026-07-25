@@ -15,6 +15,8 @@ def build_parser():
         epilog="Examples:\n"
                "  reporeaver scan ./repo\n"
                "  reporeaver scan project.zip --verbose --html report.html\n"
+               "  reporeaver scan . --diff-only\n"
+               "  reporeaver init-precommit\n"
                "  reporeaver dashboard\n"
                "  reporeaver history --last 10",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -36,6 +38,16 @@ def build_parser():
     scan.add_argument("--skip", type=str, default=None, help="Analyzers to skip (comma-sep)")
     scan.add_argument("--workers", type=int, default=4)
     scan.add_argument("--no-history", action="store_true", help="Don't save to history DB")
+    scan.add_argument("--diff-only", action="store_true", dest="diff_mode",
+                      help="Only scan files changed vs origin/main")
+    scan.add_argument("--no-cache", action="store_true", dest="no_cache",
+                      help="Disable content-based caching")
+
+    # init-precommit
+    precommit = sub.add_parser("init-precommit",
+                                help="Install reporeaver as a git pre-commit hook")
+    precommit.add_argument("--target-dir", type=str, default=".",
+                           help="Repo root to install hook into (default: .)")
 
     # dashboard
     dash = sub.add_parser("dashboard", help="Launch local web dashboard for scan history")
@@ -74,8 +86,14 @@ def main():
             skip_analyzers=skip_list,
             max_workers=args.workers,
             save_history=not args.no_history,
+            diff_mode=args.diff_mode,
+            no_cache=args.no_cache,
         )
         sys.exit(exit_code)
+
+    elif args.command == "init-precommit":
+        from .hooks import install_precommit
+        install_precommit(args.target_dir)
 
     elif args.command == "dashboard":
         from .ui.server import serve

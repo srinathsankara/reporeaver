@@ -71,6 +71,7 @@ class UnicodeAnalyzer(BaseAnalyzer):
         self._check_zero_width(content, path, findings)
         self._check_bidi_overrides(content, path, findings)
         self._check_homoglyphs(content, path, findings)
+        self._check_filename(entry, findings)
 
         return AnalyzerResult(findings)
 
@@ -123,6 +124,32 @@ class UnicodeAnalyzer(BaseAnalyzer):
                             remediation="Replace homoglyph characters with their ASCII equivalents.",
                             line_number=line_no, snippet=self._get_context(line, disguised),
                         ))
+
+    def _check_filename(self, entry: FileEntry, findings: List[Finding]):
+        """Check for bidi override or zero-width chars in the filename itself."""
+        fname = entry.path.rsplit("/", 1)[-1]
+        for char, name in ZERO_WIDTH_CHARS.items():
+            if char in fname:
+                findings.append(Finding(
+                    entry.path, Severity.HIGH, Confidence.HIGH, Category.BIDI_OVERRIDE,
+                    title=f"Filename contains invisible Unicode character: {name}",
+                    description=f"File '{repr(fname)}' has invisible chars — may display differently than it truly is.",
+                    attack_path="File reviewed under wrong name -> hidden malicious file bypasses review",
+                    remediation="Rename file to remove invisible characters.",
+                    raw_value=repr(fname),
+                ))
+
+        for char in BIDI_OVERRIDE_CHARS:
+            if char in fname:
+                findings.append(Finding(
+                    entry.path, Severity.CRITICAL, Confidence.HIGH, Category.BIDI_OVERRIDE,
+                    title="Filename contains bidi override character (Trojan Source in filename)",
+                    description=f"File '{repr(fname)}' has a bidi override — its displayed name "
+                                f"is different from its actual name. This is a known attack technique.",
+                    attack_path="File appears as something safe -> actual name maps to executable -> bypasses review",
+                    remediation="Rename file to remove bidi characters immediately.",
+                    raw_value=repr(fname),
+                ))
 
     def _get_context(self, line: str, target: str, radius: int = 40) -> str:
         idx = line.find(target)

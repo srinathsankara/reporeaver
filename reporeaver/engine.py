@@ -1,10 +1,14 @@
 """Scanning engine — orchestrates ingest, analysis, scoring, and output."""
 
 import concurrent.futures
+import hashlib
+import json
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Type
+from typing import Callable, Dict, List, Optional, Tuple, Type
 
 from .analyzers import BaseAnalyzer, all_analyzers
 from .analyzers.svg_analyzer import SVGVectorAnalyzer
@@ -16,12 +20,20 @@ from .analyzers.entropy_analyzer import EntropyAnalyzer
 from .analyzers.url_analyzer import URLNetworkAnalyzer
 from .analyzers.mime_analyzer import MimeDeceptionAnalyzer
 from .analyzers.behavioral_analyzer import BehavioralAnalyzer
+from .analyzers.secrets_analyzer import SecretsAnalyzer
+from .analyzers.cargo_analyzer import CargoAnalyzer
+from .analyzers.python_analyzer import PythonAnalyzer
+from .analyzers.dockerfile_analyzer import DockerfileAnalyzer
+from .analyzers.wasm_analyzer import WasmAnalyzer
+from .analyzers.yara_analyzer import YaraAnalyzer
 from .ingest.single import SingleFileIngester, DirectoryIngester, ArchiveIngester
-from .models import FileEntry, Finding, RiskScore, ScanResult, Severity
+from .models import Category, Confidence, FileEntry, Finding, RiskScore, ScanResult, Severity
 from .output.report import print_report
 from .output.sarif import render_sarif
 from .output.html_dashboard import render_html
 from .policy import Policy, load_policy
+
+CACHE_DIR = Path.home() / ".reporeaver" / "cache"
 
 
 def _register_builtins():
@@ -29,6 +41,8 @@ def _register_builtins():
         SVGVectorAnalyzer, UnicodeAnalyzer, ScriptAnalyzer,
         DepAnalyzer, WorkflowAnalyzer, EntropyAnalyzer,
         URLNetworkAnalyzer, MimeDeceptionAnalyzer, BehavioralAnalyzer,
+        SecretsAnalyzer, CargoAnalyzer, PythonAnalyzer,
+        DockerfileAnalyzer, WasmAnalyzer, YaraAnalyzer,
     ]:
         from .analyzers.base import _analyzer_registry
         name = getattr(cls, "name", cls.__name__)
@@ -50,10 +64,15 @@ def scan_target(
     skip_analyzers: Optional[List[str]] = None,
     max_workers: int = 4,
     save_history: bool = True,
+    diff_mode: bool = False,
+    no_cache: bool = False,
 ) -> int:
     """Run full scan pipeline against a target path.
 
-    Returns exit code (0 = pass, 1 = fail/critical).
+    Supports:
+      - diff-mode: only scan files changed vs origin/main
+      - caching: skip files whose SHA-256 hasn't changed since last scan
+      - progress bar: prints a running tally as files are analyzed
     """
     start = time.time()
     target_path = Path(target)
@@ -64,49 +83,103 @@ def scan_target(
 
     print(f"\n  RepoReaver v0.2.0 — Security Gate Scan")
     print(f"  Target: {target}")
+    if diff_mode:
+        print(f"  Mode: diff (only changed files)")
     print(f"{'-'*60}")
 
+    # Select ingester and discover files
     ingester = _select_ingester(target_path)
     ingest_result = ingester.ingest(str(target_path.absolute()))
     print(f"  Files discovered: {ingest_result.total_files} ({_fmt_size(ingest_result.total_size)})")
 
+    # If diff mode, filter to only changed files vs origin/main
+    if diff_mode:
+        changed_files = _git_changed_files(target_path)
+        if changed_files is not None:
+            before = ingest_result.total_files
+            ingest_result.files = [f for f in ingest_result.files
+                                    if f.path in changed_files]
+            print(f"  Diff filter: {before} -> {ingest_result.total_files} files")
+        else:
+            print(f"  (not a git repo or no diff available — scanning all files)")
+
+    cache_enabled = not no_cache and ingest_result.total_files > 10
+    if cache_enabled:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _prune_cache()
+
+    # Load analyzers
     skip_set = set(skip_analyzers or [])
     analyzers = _load_analyzers(skip_set)
-    print(f"  Analyzers loaded: {len(analyzers)}")
+    text_analyzers = [a for a in analyzers if not hasattr(a, "analyze_binary") or
+                      type(a).analyze_binary is BaseAnalyzer.analyze_binary]
+    binary_analyzers = [a for a in analyzers if hasattr(a, "analyze_binary") and
+                        type(a).analyze_binary is not BaseAnalyzer.analyze_binary]
+
+    print(f"  Analyzers loaded: {len(analyzers)} ({len(text_analyzers)} text, {len(binary_analyzers)} binary)")
+    print(f"  Cache: {'enabled' if cache_enabled else 'disabled'}")
 
     all_findings: List[Finding] = []
+    skipped_cache = 0
     files_analyzed = 0
+    total_jobs = ingest_result.total_files
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {}
+
         for entry in ingest_result.files:
-            try:
-                content = _read_content(entry, target_path, max_size_mb)
-            except Exception:
-                continue
-
-            for analyzer in analyzers:
-                if not analyzer.should_analyze(entry):
+            # Check cache first
+            if cache_enabled and entry.hash_sha256:
+                cached = _load_cache(entry.hash_sha256)
+                if cached is not None:
+                    all_findings.extend(cached)
+                    skipped_cache += 1
                     continue
-                fut = pool.submit(analyzer.analyze, entry, content)
-                futures[fut] = (analyzer, entry)
 
+            # Read content
+            content = ""
+            raw_bytes = b""
+            try:
+                if entry.is_text or entry.size < max_size_mb * 1024 * 1024 * 2:
+                    full = target_path / entry.path
+                    if full.exists() and full.stat().st_size <= max_size_mb * 1024 * 1024:
+                        content = full.read_text(encoding="utf-8", errors="replace")
+                        raw_bytes = content.encode("utf-8", errors="replace")
+            except Exception:
+                pass
+
+            # Submit per-file analysis jobs (one per file, all applicable analyzers run inline)
+            fut = pool.submit(_analyze_file, entry, content, raw_bytes, text_analyzers, binary_analyzers)
+            futures[fut] = entry
+
+        # Process results
         for fut in concurrent.futures.as_completed(futures):
-            analyzer, entry = futures[fut]
+            entry = futures[fut]
             files_analyzed += 1
             try:
-                result = fut.result()
-                all_findings.extend(result.findings)
+                entry_findings, entry_hash = fut.result()
+                all_findings.extend(entry_findings)
+                if cache_enabled and entry_hash:
+                    _save_cache(entry_hash, entry_findings)
             except Exception as e:
                 all_findings.append(Finding(
                     file_path=entry.path,
                     severity=Severity.ERROR,
                     confidence=Confidence.HIGH,
                     category=Category.PARSE_ERROR,
-                    title=f"Analyzer '{analyzer.name}' failed",
+                    title=f"Analysis failed for {entry.path}",
                     description=str(e),
                 ))
 
+            # Show progress every 50 files
+            if files_analyzed % 50 == 0 or files_analyzed == total_jobs:
+                print(f"  Progress: {files_analyzed}/{total_jobs} files "
+                      f"({len(all_findings)} findings so far)...")
+
+    if skipped_cache:
+        print(f"  Cache hits: {skipped_cache} files skipped (unchanged since last scan)")
+
+    # Policy evaluation
     policy = load_policy(policy_path) if policy_path else Policy()
     policy_findings = policy.evaluate(all_findings)
     all_findings.extend(policy_findings)
@@ -122,19 +195,18 @@ def scan_target(
 
     elapsed = time.time() - start
 
+    # Output phase
     if html_output:
         render_html(result, html_output)
         print(f"  HTML dashboard: {html_output}")
 
     if sarif_output:
         sarif_doc = render_sarif(result)
-        import json
         with open(sarif_output, "w") as f:
             json.dump(sarif_doc, f, indent=2)
         print(f"  SARIF output: {sarif_output}")
 
     if output_file:
-        import json
         with open(output_file, "w") as f:
             json.dump(result.to_dict(), f, indent=2)
         print(f"  JSON report: {output_file}")
@@ -162,14 +234,82 @@ def scan_target(
                 html_path=html_output,
             )
         except Exception:
-            pass  # history is a nice-to-have, don't fail the scan
+            pass
 
     return 1 if risk.score >= 7.0 else 0
 
 
+def _analyze_file(entry: FileEntry, content: str, raw: bytes,
+                  text_analyzers: list, binary_analyzers: list) -> Tuple:
+    """Run all applicable analyzers against one file. Used as a pool worker."""
+    all_findings: List[Finding] = []
+
+    if content:
+        for a in text_analyzers:
+            if not a.should_analyze(entry):
+                continue
+            try:
+                res = a.analyze(entry, content)
+                all_findings.extend(res.findings)
+            except Exception:
+                pass
+
+    if raw and binary_analyzers:
+        for a in binary_analyzers:
+            try:
+                res = a.analyze_binary(entry, raw)
+                all_findings.extend(res.findings)
+            except Exception:
+                pass
+
+    return (all_findings, entry.hash_sha256)
+
+
+def _git_changed_files(repo_path: Path) -> Optional[set]:
+    """Get list of files changed vs origin/main. Returns None if not a git repo."""
+    try:
+        # Check if it's a git repo
+        subprocess.run(["git", "rev-parse", "--git-dir"],
+                       cwd=repo_path, capture_output=True, timeout=5, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+    try:
+        # Try to get diff against a known base
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "origin/main...HEAD", "--"],
+            cwd=repo_path, capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return set(line.strip() for line in result.stdout.splitlines() if line.strip())
+
+        # Fallback: diff against HEAD
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD", "--"],
+            cwd=repo_path, capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return set(line.strip() for line in result.stdout.splitlines() if line.strip())
+    except Exception:
+        pass
+
+    # If origin/main doesn't exist (new branch), return unstaged changes
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD", "--"],
+            cwd=repo_path, capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return set(line.strip() for line in result.stdout.splitlines() if line.strip())
+    except Exception:
+        pass
+
+    return None
+
+
 def _select_ingester(path: Path):
     if path.is_file():
-        if path.suffix.lower() in (".zip", ".tar", ".tar.gz", ".tgz", ".gz"):
+        if path.suffix.lower() in (".zip", ".tar", ".tar.gz", ".tgz", ".gz", ".rar", ".7z"):
             return ArchiveIngester()
         return SingleFileIngester()
     return DirectoryIngester()
@@ -178,18 +318,47 @@ def _select_ingester(path: Path):
 def _load_analyzers(skip_set: set) -> List[BaseAnalyzer]:
     from .analyzers.base import _analyzer_registry
     loaded = []
-    for name, cls in sorted(_analyzer_registry.items(), key=lambda x: getattr(x[1], "priority", 50)):
+    for name, cls in sorted(_analyzer_registry.items(),
+                            key=lambda x: getattr(x[1], "priority", 50)):
         if name in skip_set:
             continue
         loaded.append(cls())
     return loaded
 
 
-def _read_content(entry: FileEntry, root: Path, max_size_mb: float) -> str:
-    full = root / entry.path
-    if not full.exists() or full.stat().st_size > max_size_mb * 1024 * 1024:
-        return ""
-    return full.read_text(encoding="utf-8", errors="replace")
+def _load_cache(hash_key: str) -> Optional[List[Finding]]:
+    """Load cached findings for a file hash. Returns None if no cache hit."""
+    cache_file = CACHE_DIR / f"{hash_key}.json"
+    if not cache_file.exists():
+        return None
+    try:
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+        return [Finding(**f) for f in data]
+    except Exception:
+        return None
+
+
+def _save_cache(hash_key: str, findings: List[Finding]):
+    """Cache findings for a file hash."""
+    cache_file = CACHE_DIR / f"{hash_key}.json"
+    try:
+        cache_file.write_text(
+            json.dumps([f.to_dict() for f in findings], default=str),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _prune_cache(max_entries: int = 10000):
+    """Remove old cache entries if cache exceeds max_entries."""
+    try:
+        entries = sorted(CACHE_DIR.iterdir(), key=lambda p: p.stat().st_mtime)
+        while len(entries) > max_entries:
+            entries[0].unlink()
+            entries = entries[1:]
+    except Exception:
+        pass
 
 
 def _fmt_size(b: int) -> str:

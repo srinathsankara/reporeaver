@@ -1,7 +1,7 @@
-"""Workflow Analyzer — inspects GitHub Actions, CI/CD pipelines for unpinned actions, remote exec, secrets exposure."""
+"""Workflow Analyzer — inspects CI/CD pipelines for unpinned actions, remote exec, secrets exposure, and cross-workflow attacks."""
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -45,12 +45,30 @@ SUSPICIOUS_ACTIONS_LIST = [
     (r"docker://", Severity.MEDIUM, "Docker-based action — verify image source"),
 ]
 
+# Cross-workflow: detect artifact chains that could span jobs
+ARTIFACT_UPLOAD_PATTERN = re.compile(r"actions/upload-artifact@", re.IGNORECASE)
+ARTIFACT_DOWNLOAD_PATTERN = re.compile(r"actions/download-artifact@", re.IGNORECASE)
+WORKFLOW_DISPATCH = re.compile(r"(?:workflow_dispatch|repository_dispatch|workflow_call)", re.IGNORECASE)
+
+# Reusable workflow calls — potentially risky external references
+REUSABLE_WORKFLOW = re.compile(r'uses:\s+([^@]+)@([^\s]+)', re.IGNORECASE)
+
+# Self-hosted runner detection
+SELF_HOSTED_RUNNER = re.compile(r'runs-on:\s*["\']?\[?self-hosted\]?', re.IGNORECASE)
+
 
 @register_analyzer
 class WorkflowAnalyzer(BaseAnalyzer):
     name = "workflow"
-    description = "CI/CD pipeline analysis: GitHub Actions, unpinned actions, remote exec, secrets"
+    description = "CI/CD pipeline analysis: unpinned actions, remote exec, secrets, cross-workflow chains"
     priority = 30
+
+    def __init__(self, config: Optional[Dict] = None):
+        super().__init__(config)
+        # Accumulate cross-workflow state across files
+        self._artifact_uploads: Set[str] = set()
+        self._artifact_downloads: Set[str] = set()
+        self._referenced_workflows: List[str] = []
 
     def should_analyze(self, entry: FileEntry) -> bool:
         name = entry.path.rsplit("/", 1)[-1].lower()
@@ -62,14 +80,16 @@ class WorkflowAnalyzer(BaseAnalyzer):
     def analyze(self, entry: FileEntry, content: str) -> AnalyzerResult:
         findings: List[Finding] = []
         path = entry.path
-        yaml_lines = content.splitlines()
-        joined = content
 
-        self._check_pinning(joined, path, findings)
-        self._check_remote_exec(joined, path, findings)
-        self._check_secrets(joined, path, findings)
-        self._check_actions(joined, path, findings)
-        self._check_scheduled_triggers(joined, path, findings)
+        self._check_pinning(content, path, findings)
+        self._check_remote_exec(content, path, findings)
+        self._check_secrets(content, path, findings)
+        self._check_actions(content, path, findings)
+        self._check_scheduled_triggers(content, path, findings)
+        self._check_self_hosted_runner(content, path, findings)
+        self._check_reusable_workflows(content, path, findings)
+        self._check_artifact_chain(content, path, findings)
+        self._check_dispatch_triggers(content, path, findings)
 
         return AnalyzerResult(findings)
 
@@ -134,6 +154,70 @@ class WorkflowAnalyzer(BaseAnalyzer):
                 attack_path="Scheduled trigger -> periodic execution -> persistence / beaconing",
                 remediation="Review scheduled workflows. Ensure they're necessary and properly secured.",
             ))
+
+    def _check_self_hosted_runner(self, content: str, path: str, findings: List[Finding]):
+        for match in SELF_HOSTED_RUNNER.finditer(content):
+            findings.append(Finding(
+                path, Severity.HIGH, Confidence.MEDIUM, Category.INFO,
+                title="Workflow targets self-hosted runners",
+                description="Self-hosted runners may have less isolation and broader access to internal network.",
+                attack_path="CI runs on self-hosted -> broader blast radius -> lateral movement possible",
+                remediation="Use GitHub-hosted runners if possible. Harden self-hosted runners.",
+                line_number=_line_of(content, match.start()),
+            ))
+
+    def _check_reusable_workflows(self, content: str, path: str, findings: List[Finding]):
+        for match in REUSABLE_WORKFLOW.finditer(content):
+            ref = match.group(1)
+            version = match.group(2)
+            # Check if it references an external org/repo
+            if "/" in ref and ".github/workflows/" in ref:
+                owner = ref.split("/")[0]
+                if owner != "actions" and not owner.startswith("."):
+                    findings.append(Finding(
+                        path, Severity.MEDIUM, Confidence.MEDIUM, Category.UNPINNED_ACTION,
+                        title=f"External reusable workflow: {ref}@{version}",
+                        description=f"Reusable workflow from '{ref}' at '{version}' — external code runs in CI.",
+                        attack_path="CI runs -> external workflow code executes -> supply-chain risk",
+                        remediation="Pin reusable workflows to full commit SHA. Audit external sources.",
+                        line_number=_line_of(content, match.start()),
+                        raw_value=f"{ref}@{version}",
+                    ))
+
+    def _check_artifact_chain(self, content: str, path: str, findings: List[Finding]):
+        """Check for cross-job artifact chains (upload followed by download in another job)."""
+        for match in ARTIFACT_UPLOAD_PATTERN.finditer(content):
+            self._artifact_uploads.add(path)
+        for match in ARTIFACT_DOWNLOAD_PATTERN.finditer(content):
+            self._artifact_downloads.add(path)
+
+        if ARTIFACT_UPLOAD_PATTERN.search(content) and ARTIFACT_DOWNLOAD_PATTERN.search(content):
+            findings.append(Finding(
+                path, Severity.MEDIUM, Confidence.MEDIUM, Category.INFO,
+                title="Cross-job artifact chain detected",
+                description="Workflow both uploads and downloads artifacts. "
+                            "Artifacts from one job can be consumed by another — an attacker "
+                            "who compromises the uploader can poison the downstream consumer.",
+                attack_path="Job A uploads artifact -> Job B downloads it -> poisoned artifact -> compromise",
+                remediation="Ensure artifact producers and consumers are in the same trust boundary. "
+                            "Validate artifact integrity before use.",
+            ))
+
+    def _check_dispatch_triggers(self, content: str, path: str, findings: List[Finding]):
+        """Check for externally-triggerable workflows."""
+        if WORKFLOW_DISPATCH.search(content):
+            findings.append(Finding(
+                path, Severity.LOW, Confidence.LOW, Category.INFO,
+                title="Workflow can be triggered externally (dispatch/call)",
+                description="Uses workflow_dispatch, repository_dispatch, or workflow_call. "
+                            "External actors or workflows can trigger this pipeline.",
+                attack_path="External trigger -> workflow runs -> potential abuse",
+                remediation="Restrict dispatch triggers to trusted actors. Validate inputs.",
+            ))
+
+
+def _line_of(content: str, pos: int) -> int:
+    return content[:pos].count("\n") + 1
 
 
 def _trunc(s: str, n: int) -> str:

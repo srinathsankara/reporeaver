@@ -11,6 +11,10 @@ inputs:
     description: "Path to scan (repository root by default)"
     required: false
     default: "."
+  version:
+    description: "Version of reporeaver to install (e.g., '0.2.0' or 'latest')"
+    required: false
+    default: "latest"
   severity-threshold:
     description: "Fail CI if findings at or above this level (critical, high, medium, low)"
     required: false
@@ -39,6 +43,14 @@ inputs:
     description: "Include medium-severity findings"
     required: false
     default: "false"
+  diff-only:
+    description: "Only scan files changed vs origin/main"
+    required: false
+    default: "false"
+  github-token:
+    description: "GitHub token for Checks API integration (default: ${{ github.token }})"
+    required: false
+    default: ""
 
 outputs:
   risk-score:
@@ -54,12 +66,21 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: "Install RepoReaver"
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          pip install reporeaver 2>/dev/null || pip install -e ${{ github.action_path }}/../../.. 2>/dev/null || { echo "Failed to install reporeaver"; exit 1; }
+        else
+          pip install reporeaver==${{ inputs.version }} 2>/dev/null || { echo "Failed to install reporeaver v${{ inputs.version }}"; exit 1; }
+        fi
+        # Verify installation
+        reporeaver --help >/dev/null 2>&1 || { echo "reporeaver not found after install"; exit 1; }
+
     - name: "Run RepoReaver"
       id: scan
       shell: bash
       run: |
-        pip install reporeaver 2>/dev/null || pip install -e ${{ github.action_path }}/../../.. 2>/dev/null || true
-
         ARGS="scan '${{ inputs.target }}'"
         ARGS="$ARGS --sarif '${{ inputs.output-sarif }}'"
         ARGS="$ARGS --html '${{ inputs.output-html }}'"
@@ -68,6 +89,9 @@ runs:
 
         if [ "${{ inputs.verbose }}" = "true" ]; then
           ARGS="$ARGS --verbose"
+        fi
+        if [ "${{ inputs.diff-only }}" = "true" ]; then
+          ARGS="$ARGS --diff-only"
         fi
         if [ -n "${{ inputs.policy }}" ]; then
           ARGS="$ARGS --policy '${{ inputs.policy }}'"
@@ -92,6 +116,32 @@ runs:
           echo "Threshold '$threshold' exceeded (max severity: $max_sev)"
           exit $exit_code
         fi
+
+    - name: "Post GitHub Check Run"
+      if: ${{ always() && inputs.github-token != '' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        SCORE=$(jq -r '.risk_score.score // "0"' ${{ inputs.output-json }} 2>/dev/null || echo "0")
+        CRIT=$(jq -r '.risk_score.critical // "0"' ${{ inputs.output-json }} 2>/dev/null || echo "0")
+        HIGH=$(jq -r '.risk_score.high // "0"' ${{ inputs.output-json }} 2>/dev/null || echo "0")
+        TOTAL=$(jq -r '.risk_score.total // "0"' ${{ inputs.output-json }} 2>/dev/null || echo "0")
+        CONCLUSION="success"
+        [ "$CRIT" -gt 0 ] || [ "$HIGH" -gt 3 ] && CONCLUSION="failure"
+
+        gh api repos/${{ github.repository }}/check-runs \
+          -f name="RepoReaver Security Gate" \
+          -f head_sha="${{ github.sha }}" \
+          -f status="completed" \
+          -f conclusion="$CONCLUSION" \
+          -f output[title]="RepoReaver: Score $SCORE/10" \
+          -f output[summary]="**Results**
+- Risk Score: **$SCORE/10**
+- Critical: **$CRIT**
+- High: **$HIGH**
+- Total: **$TOTAL**
+" || true
 
     - name: "Upload SARIF to GitHub Security"
       if: ${{ always() && inputs.output-sarif != '' }}

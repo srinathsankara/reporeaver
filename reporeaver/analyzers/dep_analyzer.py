@@ -1,11 +1,29 @@
-"""Dependency Analyzer — inspects transitive deps, postinstall chains, and malicious package indicators."""
+"""Dependency Analyzer — typo-squatting, lockfile tampering, lifecycle hooks, malicious indicators."""
 
 import json
 import re
-from typing import Dict, List, Optional
+from difflib import SequenceMatcher
+from typing import Dict, List, Optional, Set, Tuple
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
+
+# Commonly typosquatted packages — attackers register names one char off
+TOP_NPM: Set[str] = {
+    "lodash", "react", "express", "axios", "chalk", "moment",
+    "request", "async", "bluebird", "underscore", "colors",
+    "commander", "body-parser", "mongoose", "passport",
+    "socket.io", "jsdom", "cheerio", "babel", "webpack",
+    "gulp", "grunt", "yargs", "inquirer", "ora", "glob",
+    "rimraf", "mkdirp", "uuid", "debug", "winston", "morgan",
+    "cors", "dotenv", "jsonwebtoken", "bcrypt", "ejs", "pug",
+    "helmet", "compression", "cookie-parser", "multer",
+    "nodemailer", "joi", "validator", "cross-env", "cross-spawn",
+    "faker", "chance", "prettier", "eslint", "tslib",
+}
+
+COMMON_TYPOSQUAT_PREFIXES = {"node-", "js-", "nodejs-", "lib-", "native-"}
+COMMON_TYPOSQUAT_SUFFIXES = {"-js", "-node", "-lib", "-native", "-util", "-helper"}
 
 SUSPICIOUS_PKG_NAMES = [
     "postinstall-", "preinstall-", "install-", "*-backdoor",
@@ -22,18 +40,23 @@ SUSPICIOUS_VERSION_PATTERNS = [
     (r'[|;&`$]', Severity.CRITICAL, "Shell metacharacters in version string"),
 ]
 
+# For lockfile parcel comparisons
+NPM_REGISTRY = "registry.npmjs.org"
+ALLOWED_REGISTRIES = {NPM_REGISTRY, "registry.yarnpkg.com"}
+
 
 @register_analyzer
 class DepAnalyzer(BaseAnalyzer):
     name = "dependency"
-    description = "Dependency manifest analysis: transitive deps, lifecycle hooks, malicious indicators"
+    description = "Dependency manifest analysis: typo-squatting, lockfile tampering, lifecycle hooks, malicious deps"
     priority = 25
 
     def should_analyze(self, entry: FileEntry) -> bool:
         name = entry.path.rsplit("/", 1)[-1].lower()
         return name in ("package.json", "package-lock.json", "yarn.lock",
-                        "requirements.txt", "Pipfile", "Pipfile.lock",
-                        "Gemfile", "Gemfile.lock", "go.mod", "go.sum")
+                        "pnpm-lock.yaml", "requirements.txt", "Pipfile",
+                        "Pipfile.lock", "Gemfile", "Gemfile.lock",
+                        "go.mod", "go.sum")
 
     def analyze(self, entry: FileEntry, content: str) -> AnalyzerResult:
         findings: List[Finding] = []
@@ -41,7 +64,11 @@ class DepAnalyzer(BaseAnalyzer):
         name = entry.path.rsplit("/", 1)[-1].lower()
 
         if name == "package.json":
-            self._analyze_node(content, path, findings)
+            self._analyze_node_manifest(content, path, findings)
+        elif name == "package-lock.json":
+            self._analyze_npm_lock(content, path, findings)
+        elif name == "yarn.lock":
+            self._analyze_yarn_lock(content, path, findings)
         elif name in ("requirements.txt", "Pipfile"):
             self._analyze_python(content, path, findings)
         elif name in ("Gemfile",):
@@ -49,44 +76,36 @@ class DepAnalyzer(BaseAnalyzer):
 
         return AnalyzerResult(findings)
 
-    def _analyze_node(self, content: str, path: str, findings: List[Finding]):
+    # --------------- npm package.json ---------------
+
+    def _analyze_node_manifest(self, content: str, path: str, findings: List[Finding]):
         try:
             data = json.loads(content)
         except json.JSONDecodeError:
             return
 
-        all_deps = {
-            **data.get("dependencies", {}),
-            **data.get("devDependencies", {}),
-            **data.get("peerDependencies", {}),
-            **data.get("optionalDependencies", {}),
-        }
+        all_deps = {}
+        for key in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+            if isinstance(data.get(key), dict):
+                for k, v in data[key].items():
+                    all_deps[k] = (v if isinstance(v, str) else "*", key)
 
-        for dep_name, dep_version in all_deps.items():
-            if not isinstance(dep_version, str):
-                continue
+        # Pre-check for internal-scoped packages (dependency confusion risk)
+        for dep_name in all_deps:
+            if dep_name.startswith("@") and "/" in dep_name:
+                findings.append(Finding(
+                    path, Severity.INFO, Confidence.LOW, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Scoped package '{dep_name}' — verify it resolves to the right registry",
+                    description="Scoped packages can be public or private. If private but not configured, "
+                                "npm will fall back to public registry — dependency confusion attack.",
+                    attack_path=f"npm install -> scoped package resolved from public registry -> malicious package",
+                    remediation="Ensure .npmrc has @scope:registry set for private scoped packages.",
+                    raw_value=dep_name,
+                ))
 
-            # Check package name
-            for suspicious in SUSPICIOUS_PKG_NAMES:
-                if suspicious.endswith("*"):
-                    if suspicious[:-1].lower() in dep_name.lower():
-                        self._report(dep_name, dep_version, path, findings,
-                                     f"Package name contains suspicious pattern '{suspicious}'")
-                elif suspicious in dep_name.lower():
-                    self._report(dep_name, dep_version, path, findings,
-                                 f"Package name contains suspicious pattern '{suspicious}'")
-
-            # Check version string
-            for pat, severity, desc in SUSPICIOUS_VERSION_PATTERNS:
-                if re.search(pat, dep_version):
-                    findings.append(Finding(
-                        path, severity, Confidence.HIGH, Category.SUSPICIOUS_DEPENDENCY,
-                        title=f"{dep_name}: {desc}",
-                        description=f"Dependency '{dep_name}' version '{dep_version}' triggered: {desc}",
-                        attack_path=f"npm install -> {dep_name}@{dep_version} -> arbitrary code risk",
-                        remediation="Pin to a specific registry version and verify integrity.",
-                        raw_value=dep_version,
-                    ))
+        for dep_name, (dep_version, dep_type) in all_deps.items():
+            self._check_name_squatting(dep_name, dep_version, path, findings)
+            self._check_version_safety(dep_name, dep_version, path, findings)
 
         # Check for postinstall chains
         scripts = data.get("scripts", {})
@@ -96,11 +115,127 @@ class DepAnalyzer(BaseAnalyzer):
                     findings.append(Finding(
                         path, Severity.INFO, Confidence.HIGH, Category.POSTINSTALL_CHAIN,
                         title=f"Package has '{hook}' script",
-                        description=f"This script executes during install. Review: {_trunc(scripts[hook], 200)}",
+                        description=f"This script runs during install. Review: {_trunc(scripts[hook], 200)}",
                         attack_path=f"npm install -> {hook} -> {_trunc(scripts[hook], 100)}",
-                        remediation="Audit lifecycle scripts. Consider `--ignore-scripts`.",
+                        remediation="Audit lifecycle scripts. Use `--ignore-scripts` for inspection.",
                         snippet=scripts[hook],
                     ))
+
+    def _check_name_squatting(self, name: str, version: str, path: str, findings: List[Finding]):
+        """Detect typo-squatting by edit distance against known popular packages."""
+        base = name.split("/")[-1]  # strip scope
+        for popular in TOP_NPM:
+            ratio = SequenceMatcher(None, base.lower(), popular).ratio()
+            # High similarity but not exact match
+            if 0.75 <= ratio < 1.0:
+                findings.append(Finding(
+                    path, Severity.HIGH, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Possible typo-squatting: '{name}' is similar to '{popular}' ({ratio:.0%})",
+                    description=f"Dependency '{name}'@{version} has high similarity to popular package "
+                                f"'{popular}'. This may be a typo-squatting attack.",
+                    attack_path=f"npm install -> {name} -> potentially mimics {popular} -> malicious code runs",
+                    remediation=f"Verify the package name. Did you mean '{popular}'? Check the registry.",
+                    raw_value=f"{name}@{version}",
+                ))
+
+        # Check for prefix/suffix additions that reek of squatting
+        lower = base.lower()
+        for prefix in COMMON_TYPOSQUAT_PREFIXES:
+            if lower.startswith(prefix) and lower[len(prefix):] in TOP_NPM:
+                findings.append(Finding(
+                    path, Severity.HIGH, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Suspicious prefix on '{name}': '{prefix}' added to '{base[len(prefix):]}'",
+                    description=f"Package adds '{prefix}' to a known package name — common squatting pattern.",
+                    attack_path=f"npm install -> prefixed name mistakes -> malicious package",
+                    remediation=f"Check if '{prefix}{base[len(prefix):]}' is a legitimate fork or a squat.",
+                    raw_value=f"{name}@{version}",
+                ))
+        for suffix in COMMON_TYPOSQUAT_SUFFIXES:
+            if lower.endswith(suffix) and lower[:-len(suffix)] in TOP_NPM:
+                findings.append(Finding(
+                    path, Severity.HIGH, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Suspicious suffix on '{name}': adds '{suffix}' to '{base[:-len(suffix)]}'",
+                    description=f"Package appends '{suffix}' to a known package — common squatting variant.",
+                    attack_path=f"npm install -> suffixed name -> malicious package",
+                    remediation=f"Verify this is not a squat mimicking '{base[:-len(suffix)]}'.",
+                    raw_value=f"{name}@{version}",
+                ))
+
+    def _check_version_safety(self, name: str, version: str, path: str, findings: List[Finding]):
+        for suspicious in SUSPICIOUS_PKG_NAMES:
+            pattern = suspicious.replace("*", "")
+            if pattern and pattern.lower() in name.lower():
+                findings.append(Finding(
+                    path, Severity.HIGH, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"{name}: Package name contains suspicious pattern '{suspicious}'",
+                    description=f"Dependency '{name}'@{version}: name matches suspicious pattern '{suspicious}'.",
+                    attack_path=f"npm install -> {name} executes -> compromise",
+                    remediation="Remove or replace this dependency with a trusted alternative.",
+                    raw_value=f"{name}@{version}",
+                ))
+
+        for pat, severity, desc in SUSPICIOUS_VERSION_PATTERNS:
+            if re.search(pat, version):
+                findings.append(Finding(
+                    path, severity, Confidence.HIGH, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"{name}: {desc}",
+                    description=f"Dependency '{name}' version '{version}' triggered: {desc}",
+                    attack_path=f"npm install -> {name}@{version} -> arbitrary code risk",
+                    remediation="Pin to a specific registry version and verify integrity.",
+                    raw_value=version,
+                ))
+
+    # --------------- npm lockfile ---------------
+
+    def _analyze_npm_lock(self, content: str, path: str, findings: List[Finding]):
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            return
+
+        packages = data.get("packages", {}) or {}
+        for pkg_path, pkg_info in packages.items():
+            if pkg_path == "":
+                continue
+            resolved: Optional[str] = pkg_info.get("resolved")
+            if resolved and NPM_REGISTRY not in resolved:
+                name = pkg_path.split("node_modules/")[-1] if "node_modules/" in pkg_path else pkg_path
+                findings.append(Finding(
+                    path, Severity.CRITICAL, Confidence.HIGH, Category.URL_DEPENDENCY,
+                    title=f"Lockfile resolved URL outside registry: {_trunc(resolved, 100)}",
+                    description=f"Package '{name}' resolves to '{resolved}' — not the official npm registry.",
+                    attack_path="npm ci -> fetches from attacker-controlled URL -> arbitrary code",
+                    remediation="Run `npm audit` and verify integrity hashes. Reset lockfile if suspicious.",
+                    raw_value=resolved,
+                ))
+
+            integrity = pkg_info.get("integrity", "")
+            if integrity and not integrity.startswith("sha"):
+                findings.append(Finding(
+                    path, Severity.HIGH, Confidence.HIGH, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Suspicious integrity hash: {_trunc(integrity, 60)}",
+                    description=f"Package '{pkg_path}' has non-standard integrity hash: {integrity}",
+                    attack_path="npm ci -> integrity check bypassed -> malicious package installed",
+                    remediation="Regenerate lockfile. This indicates lockfile tampering.",
+                ))
+
+    def _analyze_yarn_lock(self, content: str, path: str, findings: List[Finding]):
+        """Basic yarn.lock check — look for resolved URLs outside allowed registries."""
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("resolved ") and "https://" in stripped:
+                url = stripped.split("resolved ")[-1].strip().strip("\"'")
+                if not any(reg in url for reg in ALLOWED_REGISTRIES):
+                    findings.append(Finding(
+                        path, Severity.CRITICAL, Confidence.HIGH, Category.URL_DEPENDENCY,
+                        title=f"Yarn lockfile resolves to external URL: {_trunc(url, 100)}",
+                        description=f"Package resolved to non-registry URL: {url}",
+                        attack_path="yarn install -> fetches from external URL -> malicious package",
+                        remediation="Verify the URL and reset lockfile if needed.",
+                        raw_value=url,
+                    ))
+
+    # --------------- Python ---------------
 
     def _analyze_python(self, content: str, path: str, findings: List[Finding]):
         for line_no, line in enumerate(content.splitlines(), 1):
@@ -112,10 +247,22 @@ class DepAnalyzer(BaseAnalyzer):
                     path, Severity.HIGH, Confidence.MEDIUM, Category.URL_DEPENDENCY,
                     title=f"Python dependency from URL: {_trunc(stripped, 100)}",
                     description="URL-based pip dependencies bypass PyPI security guarantees.",
-                    attack_path=f"pip install -> URL dependency -> arbitrary code",
+                    attack_path="pip install -> URL dependency -> arbitrary code",
                     remediation="Use PyPI versions with hash verification.",
                     line_number=line_no, snippet=stripped,
                 ))
+            # Check for editable installs
+            if stripped.startswith("-e ") or " --editable" in stripped:
+                findings.append(Finding(
+                    path, Severity.MEDIUM, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
+                    title="Editable pip install — can execute arbitrary setup.py",
+                    description=f"Editable install: {_trunc(stripped, 100)}",
+                    attack_path="pip install -e -> setup.py executes during install -> compromise",
+                    remediation="Avoid editable installs in production. Pin exact versions.",
+                    line_number=line_no, snippet=stripped,
+                ))
+
+    # --------------- Ruby ---------------
 
     def _analyze_ruby(self, content: str, path: str, findings: List[Finding]):
         for line_no, line in enumerate(content.splitlines(), 1):
@@ -128,17 +275,6 @@ class DepAnalyzer(BaseAnalyzer):
                     remediation="Use rubygems.org sources with lockfiles.",
                     line_number=line_no, snippet=line.strip(),
                 ))
-
-    def _report(self, dep_name: str, dep_version: str, path: str,
-                findings: List[Finding], reason: str):
-        findings.append(Finding(
-            path, Severity.HIGH, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
-            title=f"{dep_name}: {reason}",
-            description=f"Dependency '{dep_name}'@{dep_version}: {reason}",
-            attack_path=f"npm install -> {dep_name} executes -> compromise",
-            remediation="Remove or replace this dependency with a trusted alternative.",
-            raw_value=f"{dep_name}@{dep_version}",
-        ))
 
 
 def _trunc(s: str, n: int) -> str:

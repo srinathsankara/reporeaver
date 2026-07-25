@@ -48,11 +48,13 @@ class TestEngine:
 
     def test_load_all_analyzers(self):
         analyzers = _load_analyzers(set())
-        assert len(analyzers) >= 9
+        assert len(analyzers) >= 14
         names = [a.name for a in analyzers]
         assert "svg_vector" in names
         assert "unicode" in names
         assert "behavioral" in names
+        assert "secrets" in names
+        assert "yara" in names
 
     def test_load_analyzers_skip(self):
         analyzers = _load_analyzers({"entropy", "behavioral"})
