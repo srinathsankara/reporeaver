@@ -6,6 +6,7 @@ generic passwords, database connection strings. Uses entropy gating to reduce FP
 Inspired by truffleHog, Gitleaks, and similar tools.
 """
 
+import math
 import re
 from typing import Dict, List, Optional, Tuple
 
@@ -30,7 +31,7 @@ SECRET_PATTERNS: List[Tuple[str, str, str, Severity, bool]] = [
      "AWS Key (bare)", "Standalone AWS access key ID", Severity.CRITICAL, False),
     (r'(?i)-----BEGIN\s+\w+(?:\s+\w+)?\s+PRIVATE\s+(?:KEY|BLOCK)-----',
      "Private Key", "Contains an encoded private key", Severity.CRITICAL, False),
-    (r'(?i)(?:-----BEGIN\s*CERTIFICATE-----)',
+    (r'(?i)-----BEGIN\s+CERTIFICATE-----',
      "Certificate", "Contains a certificate (may include private data)", Severity.MEDIUM, False),
     (r'(?i)(?:jwt|bearer)\s*[:=]\s*["\']?([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)["\'\s]',
      "JWT Token", "JSON Web Token — encoded auth token", Severity.HIGH, False),
@@ -129,4 +130,4 @@ def _shannon(s: str) -> float:
     for c in s:
         freq[c] = freq.get(c, 0) + 1
     n = len(s)
-    return -sum((c / n) * __import__('math').log2(c / n) for c in freq.values())
+    return -sum((c / n) * math.log2(c / n) for c in freq.values())

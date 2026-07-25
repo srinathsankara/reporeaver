@@ -5,9 +5,9 @@ All network calls are opt-in (user must configure).
 """
 
 import json
-import os
 import sqlite3
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path

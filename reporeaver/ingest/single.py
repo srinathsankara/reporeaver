@@ -152,10 +152,14 @@ def _ingest_tar(path: Path, depth: int = 0) -> IngestResult:
 
 
 def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
-    """Extract a nested archive from raw bytes."""
-    if data[:2] == b"PK" and depth < 3:
+    """Extract a nested archive from raw bytes. Handles both zip and tar."""
+    if depth >= 3:
+        return IngestResult(source_type="nested_too_deep")
+    import io
+
+    # Try nested ZIP
+    if data[:2] == b"PK":
         try:
-            import io
             with zipfile.ZipFile(io.BytesIO(data)) as z:
                 files = []
                 for info in z.infolist():
@@ -172,6 +176,28 @@ def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
                     if entry:
                         files.append(entry)
                 return IngestResult(files=files, source_type="nested_zip")
+        except Exception:
+            pass
+    # Try nested tar
+    if len(data) > 2:
+        try:
+            import tarfile
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tar:
+                files = []
+                for member in tar.getmembers():
+                    if not member.isfile():
+                        continue
+                    fname = f"{Path(name).stem}/{member.name}"
+                    if any(seg in IGNORE_DIRS for seg in fname.split("/")):
+                        continue
+                    ext = Path(fname).suffix.lower()
+                    if ext in IGNORE_EXTS or ext in ARCHIVE_EXTS:
+                        continue
+                    mime = guess_mime(fname)
+                    entry = _build_entry(fname, member.size, mime, ext)
+                    if entry:
+                        files.append(entry)
+                return IngestResult(files=files, source_type="nested_tar")
         except Exception:
             pass
     return IngestResult(source_type="nested_unknown")

@@ -1,14 +1,12 @@
 """Scanning engine — orchestrates ingest, analysis, scoring, and output."""
 
 import concurrent.futures
-import hashlib
 import json
-import os
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Type
+from typing import List, Optional, Tuple
 
 from .analyzers import BaseAnalyzer, all_analyzers
 from .analyzers.svg_analyzer import SVGVectorAnalyzer

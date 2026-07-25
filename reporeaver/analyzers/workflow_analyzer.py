@@ -1,7 +1,7 @@
 """Workflow Analyzer — inspects CI/CD pipelines for unpinned actions, remote exec, secrets exposure, and cross-workflow attacks."""
 
 import re
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -62,13 +62,6 @@ class WorkflowAnalyzer(BaseAnalyzer):
     name = "workflow"
     description = "CI/CD pipeline analysis: unpinned actions, remote exec, secrets, cross-workflow chains"
     priority = 30
-
-    def __init__(self, config: Optional[Dict] = None):
-        super().__init__(config)
-        # Accumulate cross-workflow state across files
-        self._artifact_uploads: Set[str] = set()
-        self._artifact_downloads: Set[str] = set()
-        self._referenced_workflows: List[str] = []
 
     def should_analyze(self, entry: FileEntry) -> bool:
         name = entry.path.rsplit("/", 1)[-1].lower()
@@ -185,12 +178,7 @@ class WorkflowAnalyzer(BaseAnalyzer):
                     ))
 
     def _check_artifact_chain(self, content: str, path: str, findings: List[Finding]):
-        """Check for cross-job artifact chains (upload followed by download in another job)."""
-        for match in ARTIFACT_UPLOAD_PATTERN.finditer(content):
-            self._artifact_uploads.add(path)
-        for match in ARTIFACT_DOWNLOAD_PATTERN.finditer(content):
-            self._artifact_downloads.add(path)
-
+        """Check for artifact upload+download in the same workflow (cross-job chain)."""
         if ARTIFACT_UPLOAD_PATTERN.search(content) and ARTIFACT_DOWNLOAD_PATTERN.search(content):
             findings.append(Finding(
                 path, Severity.MEDIUM, Confidence.MEDIUM, Category.INFO,

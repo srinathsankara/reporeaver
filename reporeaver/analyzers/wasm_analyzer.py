@@ -111,79 +111,88 @@ class WasmAnalyzer(BaseAnalyzer):
 
 
 def _parse_imports(data: bytes) -> List[tuple]:
-    """Parse WASM import section (section ID 2) to extract (module, name) pairs."""
     imports: List[tuple] = []
-    pos = 8  # skip magic + version
+    pos = 8
 
     while pos < len(data):
-        if pos + 1 > len(data):
+        if pos >= len(data):
             break
         section_id = data[pos]
         pos += 1
-        if pos + 5 > len(data):
+        section_size, pos = _read_leb128(data, pos)
+        if section_size is None:
             break
-        section_size = struct.unpack("<I", data[pos:pos+4])[0]
-        pos += 4
+        section_end = pos + section_size
 
         if section_id == SECTION_IMPORT:
-            if pos + 4 > len(data):
+            count, pos = _read_leb128(data, pos)
+            if count is None or count > 50000:
                 break
-            count = struct.unpack("<I", data[pos:pos+4])[0]
-            pos += 4
             for _ in range(count):
                 module, pos = _read_name(data, pos)
                 name, pos = _read_name(data, pos)
                 if module and name:
                     imports.append((module, name))
-                # Skip the import kind byte and type index
                 if pos < len(data):
-                    pos += 3  # kind(1) + type_idx(2)
+                    pos += 3  # skip import kind(1) + type_idx(2)
+            pos = section_end
         else:
-            pos += section_size  # skip non-import sections
+            pos = section_end
 
     return imports
 
 
 def _parse_exports(data: bytes) -> List[str]:
-    """Parse WASM export section (section ID 7) to extract export names."""
     exports: List[str] = []
     pos = 8
 
     while pos < len(data):
-        if pos + 1 > len(data):
+        if pos >= len(data):
             break
         section_id = data[pos]
         pos += 1
-        if pos + 5 > len(data):
+        section_size, pos = _read_leb128(data, pos)
+        if section_size is None:
             break
-        section_size = struct.unpack("<I", data[pos:pos+4])[0]
-        pos += 4
+        section_end = pos + section_size
 
         if section_id == SECTION_EXPORT:
-            if pos + 4 > len(data):
+            count, pos = _read_leb128(data, pos)
+            if count is None or count > 50000:
                 break
-            count = struct.unpack("<I", data[pos:pos+4])[0]
-            pos += 4
             for _ in range(count):
                 name, pos = _read_name(data, pos)
                 if name:
                     exports.append(name)
                 if pos < len(data):
                     pos += 2  # export kind(1) + index(1)
+            pos = section_end
         else:
-            pos += section_size
+            pos = section_end
 
     return exports
 
 
+def _read_leb128(data: bytes, pos: int) -> tuple:
+    """Read a WASM LEB128 unsigned integer."""
+    result = 0
+    shift = 0
+    start = pos
+    while pos < len(data):
+        byte = data[pos]
+        result |= (byte & 0x7F) << shift
+        shift += 7
+        pos += 1
+        if not (byte & 0x80):
+            return (result, pos)
+        if shift > 35:
+            return (None, start)
+    return (None, start)
+
+
 def _read_name(data: bytes, pos: int) -> tuple:
-    """Read a WASM-encoded name (length-prefixed UTF-8 string)."""
-    if pos + 4 > len(data):
-        return ("", pos)
-    nlen = struct.unpack("<I", data[pos:pos+4])[0]
-    pos += 4
-    if pos + nlen > len(data):
+    nlen, pos = _read_leb128(data, pos)
+    if nlen is None or pos + nlen > len(data):
         return ("", pos)
     name = data[pos:pos+nlen].decode("utf-8", errors="replace")
-    pos += nlen
-    return (name, pos)
+    return (name, pos + nlen)

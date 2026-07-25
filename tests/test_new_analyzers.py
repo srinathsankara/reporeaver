@@ -159,15 +159,26 @@ class TestWasmAnalyzer:
     def test_detects_emscripten_run_script(self):
         """WASM with emscripten_run_script import — dangerous."""
         import struct
-        # Build a minimal WASM with import section containing emscripten_run_script
+        def _leb(v):
+            """Encode v as unsigned LEB128."""
+            buf = []
+            while True:
+                byte = v & 0x7F
+                v >>= 7
+                if v:
+                    byte |= 0x80
+                buf.append(byte)
+                if not v:
+                    break
+            return bytes(buf)
+
         module_name = b"env"
         func_name = b"emscripten_run_script"
-        # Build import section manually
-        section_content = struct.pack("<I", 1)  # 1 import
-        section_content += struct.pack("<I", len(module_name)) + module_name
-        section_content += struct.pack("<I", len(func_name)) + func_name
-        section_content += b"\x00" + b"\x00\x00"  # kind=0 (func), type_idx=0
-        section_header = struct.pack("<B", 2) + struct.pack("<I", len(section_content))
+        section_content = _leb(1)  # 1 import
+        section_content += _leb(len(module_name)) + module_name
+        section_content += _leb(len(func_name)) + func_name
+        section_content += b"\x00" + b"\x00\x00"
+        section_header = struct.pack("<B", 2) + _leb(len(section_content))
         wasm = b"\x00asm\x01\x00\x00\x00" + section_header + section_content
         res = self.a.analyze_binary(_entry("test.wasm"), wasm)
         assert any("emscripten_run_script" in f.title for f in res.findings)
