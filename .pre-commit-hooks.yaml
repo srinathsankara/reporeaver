@@ -1,0 +1,7 @@
+- id: reporeaver
+  name: RepoReaver
+  description: Scan staged files for security threats before committing
+  entry: reporeaver scan --diff-only
+  language: python
+  types: [text]
+  stages: [commit]
