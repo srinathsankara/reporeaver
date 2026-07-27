@@ -1,0 +1,37 @@
+name: 'RepoReaver Security Gate'
+description: 'Pre-clone repo security scanner — detects obfuscated payloads, secrets, CI/CD abuse, and supply-chain threats.'
+author: 'Srinath Sankara'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  target:
+    description: 'Path to scan (defaults to workspace root)'
+    required: false
+    default: '.'
+  severity-threshold:
+    description: 'Minimum severity to fail CI (low, medium, high, critical)'
+    required: false
+    default: 'high'
+  diff-only:
+    description: 'Only scan files changed vs origin/main'
+    required: false
+    default: 'true'
+  skip-analyzers:
+    description: 'Comma-separated analyzers to skip'
+    required: false
+    default: ''
+
+outputs:
+  risk-score:
+    description: 'Numerical risk score (0-10)'
+  passed:
+    description: 'true if risk score below threshold, false otherwise'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - 'scan'
+    - ${{ inputs.target }}
