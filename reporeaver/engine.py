@@ -11,7 +11,8 @@ from typing import List, Optional, Tuple
 
 log = logging.getLogger("reporeaver.engine")
 
-from .analyzers import BaseAnalyzer, all_analyzers
+from . import __version__
+from .analyzers import BaseAnalyzer
 from .analyzers.svg_analyzer import SVGVectorAnalyzer
 from .analyzers.unicode_analyzer import UnicodeAnalyzer
 from .analyzers.script_analyzer import ScriptAnalyzer
@@ -85,7 +86,7 @@ def scan_target(
         print(f"Error: '{target}' does not exist", file=sys.stderr)
         return 1
 
-    print(f"\n  RepoReaver v0.2.0 — Security Gate Scan")
+    print(f"\n  RepoReaver v{__version__} — Security Gate Scan")
     print(f"  Target: {target}")
     if diff_mode:
         print(f"  Mode: diff (only changed files)")

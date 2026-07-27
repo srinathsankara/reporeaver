@@ -41,7 +41,6 @@ $REPOREAVER scan . \\
     --verbose \\
     --max-size 5 \\
     --no-cache \\
-    --skip worklist \\
     --no-history
 
 EXIT_CODE=$?

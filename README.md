@@ -5,6 +5,13 @@
 [![CI](https://github.com/srinathsankara/reporeaver/actions/workflows/ci.yml/badge.svg)](https://github.com/srinathsankara/reporeaver/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.2.0-blue)](https://pypi.org/project/reporeaver/)
+[![GitHub stars](https://img.shields.io/github/stars/srinathsankara/reporeaver?style=social)](https://github.com/srinathsankara/reporeaver/stargazers)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Security: reporeaver](https://img.shields.io/badge/security-reporeaver-blue)](https://github.com/srinathsankara/reporeaver)
+[![OpenSSF Best Practices](https://img.shields.io/badge/openssf-best%20practices-2b5c8a)](https://www.bestpractices.dev/)
+
+[![Star History Chart](https://api.star-history.com/svg?repos=srinathsankara/reporeaver&type=Date)](https://star-history.com/#srinathsankara/reporeaver&Date)
 
 ---
 
@@ -144,8 +151,8 @@ The Action:
 
 ```bash
 docker build -t reporeaver .
-docker run --rm -v $(pwd):/scan reporeaver scan /scan
-docker run --rm -v $(pwd):/scan reporeaver scan /scan --html /scan/report.html
+docker run --rm -v "${PWD}:/scan" reporeaver scan /scan
+docker run --rm -v "${PWD}:/scan" reporeaver scan /scan --html /scan/report.html
 ```
 
 ## Architecture
@@ -194,8 +201,21 @@ git clone https://github.com/srinathsankara/reporeaver.git
 cd reporeaver
 pip install -e ".[dev]"
 python -m pytest tests/ -v
+python -m reporeaver scan ./tests/fixtures
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). All contributions welcome — bugs, features, docs, tests.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Related Projects
+
+- [truffleHog](https://github.com/trufflesecurity/trufflehog) — secrets scanning
+- [Gitleaks](https://github.com/gitleaks/gitleaks) — git secrets scanning
+- [Semgrep](https://github.com/semgrep/semgrep) — static analysis
+- [Checkov](https://github.com/bridgecrewio/checkov) — IaC security
+- [Bearer](https://github.com/bearer/bearer) — SAST for data security

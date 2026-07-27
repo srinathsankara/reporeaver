@@ -5,31 +5,6 @@ from typing import Dict, List, Optional
 
 from .models import Category, Confidence, Finding, Severity
 
-DEFAULT_POLICY_YAML = """
-# reporeaver default policy
-# Severity threshold: findings at or above this level cause exit code 1
-severity_threshold: high
-
-# Auto-block these categories at any severity
-block_categories:
-  - c2_callback
-  - credential_theft
-  - ci_remote_exec
-  - behavioral_exfil
-  - encoded_payload
-
-# Always allow these (safe patterns)
-allow_paths:
-  - "node_modules/"
-  - ".git/"
-  - "__pycache__/"
-  - "vendor/"
-  - ".venv/"
-  - "dist/"
-  - "build/"
-"""
-
-
 @dataclass
 class Policy:
     severity_threshold: str = "high"

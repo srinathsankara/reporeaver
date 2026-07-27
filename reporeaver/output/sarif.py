@@ -34,7 +34,7 @@ def render_sarif(result: ScanResult) -> Dict[str, Any]:
                 "shortDescription": {"text": f.title},
                 "fullDescription": {"text": f.description},
                 "defaultConfiguration": {"level": LEVEL_MAP.get(f.severity, "warning")},
-                "helpUri": f"https://reporeaver.dev/rules/{f.category.value}",
+                "helpUri": f"https://github.com/srinathsankara/reporeaver/blob/main/reporeaver/analyzers/{f.category.value}.md",
                 "properties": {
                     "severity": f.severity.value,
                     "confidence": f.confidence.value,
@@ -79,7 +79,7 @@ def render_sarif(result: ScanResult) -> Dict[str, Any]:
         "driver": {
             "name": "reporeaver",
             "version": result.version,
-            "informationUri": "https://github.com/reporeaver/reporeaver",
+            "informationUri": "https://github.com/srinathsankara/reporeaver",
             "rules": list(rules.values()),
         }
     }

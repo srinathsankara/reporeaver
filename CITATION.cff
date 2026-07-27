@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use RepoReaver in your research, please cite it."
+title: "RepoReaver — Pre-clone repo security scanner"
+authors:
+  - family-names: "Sankara"
+    given-names: "Srinath"
+    email: "srinathsankara@users.noreply.github.com"
+    orcid: ""
+version: 0.2.0
+date-released: 2026-07-25
+url: "https://github.com/srinathsankara/reporeaver"
+license: MIT
+repository-code: "https://github.com/srinathsankara/reporeaver"
+keywords:
+  - security
+  - static-analysis
+  - devsecops
+  - supply-chain-security
+  - malware-detection
+  - ci-cd-security
