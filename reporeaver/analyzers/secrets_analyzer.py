@@ -140,6 +140,7 @@ HASH_LINE = re.compile(r'^[A-Fa-f0-9]{32,}$')
 @register_analyzer
 class SecretsAnalyzer(BaseAnalyzer):
     name = "secrets"
+    slow = True
     description = "Hardcoded credentials, API keys, tokens, private keys, connection strings"
     priority = 5
 

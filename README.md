@@ -131,12 +131,13 @@ RepoReaver auto-discovers these config files in order:
 
 Example `reporeaver.yaml`:
 ```yaml
-severity_threshold: high
 skip_analyzers:
   - entropy
   - yara
 max_size_mb: 5
 policy: my-policy.yaml
+diff_only: true
+quick_mode: false
 ```
 
 ## GitHub Action

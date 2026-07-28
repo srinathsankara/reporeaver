@@ -3,7 +3,8 @@
 import os
 import subprocess
 from pathlib import Path
-from reporeaver.pipeline import DiffFilter, _read_entry, CacheManager
+from reporeaver.config import RepoReaverConfig
+from reporeaver.pipeline import DiffFilter, _read_entry, CacheManager, ScanPipeline, _analyze_file
 from reporeaver.models import FileEntry
 
 
@@ -65,3 +66,58 @@ class TestCacheManagerExtra:
         cm = CacheManager(tmp_path / "nonexistent")
         cm.prune()
         assert True
+
+
+class TestAnalyzeFile:
+    def test_empty_content_no_analyzers(self):
+        entry = FileEntry(path="test.txt", size=5, is_text=True)
+        findings, errors = _analyze_file(entry, "", b"", [], [])
+        assert findings == []
+        assert errors == 0
+
+    def test_text_analyzer_error_logged(self, caplog):
+        class FailingAnalyzer:
+            name = "fail"
+            should_analyze = lambda self, e: True
+            analyze = lambda self, e, c: (_ for _ in ()).throw(Exception("boom"))
+        entry = FileEntry(path="test.txt", size=5, is_text=True)
+        findings, errors = _analyze_file(entry, "hello", b"", [FailingAnalyzer()], [])
+        assert errors == 1
+        assert "boom" in caplog.text
+
+    def test_binary_analyzer_error_logged(self, caplog):
+        class FailingBinAnalyzer:
+            name = "bfail"
+            should_analyze = lambda self, e: True
+            analyze_binary = lambda self, e, r: (_ for _ in ()).throw(Exception("bboom"))
+        entry = FileEntry(path="test.bin", size=5, is_text=False)
+        findings, errors = _analyze_file(entry, "", b"raw", [], [FailingBinAnalyzer()])
+        assert errors == 1
+        assert "bboom" in caplog.text
+
+
+class TestScanPipelineLoadAnalyzers:
+    def test_quick_mode_skips_slow(self):
+        config = RepoReaverConfig(quick_mode=True)
+        sp = ScanPipeline(Path("."), config)
+        text, binary = sp._load_analyzers()
+        names = {a.name for a in text} | {a.name for a in binary}
+        assert "entropy" not in names
+        assert "yara" not in names
+        assert "secrets" not in names
+
+    def test_skip_analyzers(self):
+        config = RepoReaverConfig(skip_analyzers=["entropy", "yara", "secrets"])
+        sp = ScanPipeline(Path("."), config)
+        text, binary = sp._load_analyzers()
+        names = {a.name for a in text} | {a.name for a in binary}
+        assert "entropy" not in names
+        assert "yara" not in names
+
+    def test_normal_mode_loads_all(self):
+        config = RepoReaverConfig()
+        sp = ScanPipeline(Path("."), config)
+        text, binary = sp._load_analyzers()
+        names = {a.name for a in text} | {a.name for a in binary}
+        assert "entropy" in names
+        assert "yara" in names

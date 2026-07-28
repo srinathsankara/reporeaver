@@ -58,7 +58,7 @@ def _analyze_file(entry: FileEntry, content: str, raw: bytes,
                 res = a.analyze(entry, content)
                 findings.extend(res.findings)
             except Exception as exc:
-                log.warning("Analyzer %s failed on %s: %s", a.name, entry.path, exc)
+                log.warning("Analyzer %s failed on %s: %s", a.name, entry.path, exc, exc_info=True)
                 errors += 1
 
     if raw and binary_analyzers:
@@ -67,7 +67,7 @@ def _analyze_file(entry: FileEntry, content: str, raw: bytes,
                 res = a.analyze_binary(entry, raw)
                 findings.extend(res.findings)
             except Exception as exc:
-                log.warning("Binary analyzer %s failed on %s: %s", a.name, entry.path, exc)
+                log.warning("Binary analyzer %s failed on %s: %s", a.name, entry.path, exc, exc_info=True)
                 errors += 1
 
     return findings, errors
@@ -217,7 +217,7 @@ class ScanPipeline:
                             if self._cache:
                                 self._cache.set(entry, findings)
                     except Exception as exc:
-                        log.error("Analyzer failed for %s: %s", entry.path, exc)
+                        log.error("Analyzer failed for %s: %s", entry.path, exc, exc_info=True)
                         analyzer_errors += 1
 
         # 5. Compute risk

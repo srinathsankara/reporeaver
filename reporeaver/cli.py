@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .config import RepoReaverConfig
+from .config import RepoReaverConfig, find_config, load_config
 from .engine import scan_target
 from .logging import setup_logging
 
@@ -36,9 +36,11 @@ def build_parser():
     scan.add_argument("--html", type=str, default=None, dest="html_output")
     scan.add_argument("--sarif", type=str, default=None, dest="sarif_output")
     scan.add_argument("--policy", type=str, default=None)
-    scan.add_argument("--max-size", type=float, default=2.0, metavar="MB")
+    scan.add_argument("--max-size", type=float, default=None, metavar="MB",
+                      help="Max file size in MB to scan (default: config or 2.0)")
     scan.add_argument("--skip", type=str, default=None, help="Analyzers to skip (comma-sep)")
-    scan.add_argument("--workers", type=int, default=4)
+    scan.add_argument("--workers", type=int, default=None,
+                      help="Parallel worker count (default: config or 4)")
     scan.add_argument("--no-history", action="store_true", help="Don't save to history DB")
     scan.add_argument("--diff-only", action="store_true", dest="diff_mode",
                       help="Only scan files changed vs origin/main")
@@ -82,14 +84,18 @@ def main():
 
         skip_list = args.skip.split(",") if args.skip else None
         cache_dir = Path.home() / ".reporeaver" / "cache" if not args.no_cache else None
+
+        cfg_file = find_config(path if path.is_dir() else path.parent)
+        cfg_dict = load_config(cfg_file) if cfg_file else {}
+        # CLI args override config file values; config defaults are fallback
         config = RepoReaverConfig(
             cache_dir=cache_dir,
-            diff_only=args.diff_mode,
-            workers=args.workers,
-            max_size_mb=args.max_size,
-            policy=args.policy,
-            skip_analyzers=skip_list,
-            quick_mode=args.quick,
+            diff_only=args.diff_mode if args.diff_mode else cfg_dict.get("diff_only", False),
+            workers=args.workers if args.workers is not None else cfg_dict.get("workers", 4),
+            max_size_mb=args.max_size if args.max_size is not None else cfg_dict.get("max_size_mb", 2.0),
+            policy=args.policy if args.policy is not None else cfg_dict.get("policy"),
+            skip_analyzers=skip_list if skip_list is not None else cfg_dict.get("skip_analyzers"),
+            quick_mode=args.quick if args.quick else cfg_dict.get("quick_mode", False),
             no_cache=args.no_cache,
         )
         save_history = not args.no_history
