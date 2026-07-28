@@ -2,6 +2,7 @@
 
 import builtins
 from unittest.mock import patch
+
 from reporeaver.output.report import _safe_print
 
 

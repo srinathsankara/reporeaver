@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Data models. Nothing fancy, just the shapes we pass around."""
 
 from dataclasses import dataclass, field

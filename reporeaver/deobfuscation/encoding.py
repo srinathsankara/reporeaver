@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Encoding deobfuscation — decode base64, hex, gzip, and layered encodings."""
 
 import base64
@@ -5,7 +6,6 @@ import binascii
 import gzip
 import logging
 import re
-from io import BytesIO
 from typing import Optional
 
 log = logging.getLogger("reporeaver.deobfuscation.encoding")

@@ -1,10 +1,9 @@
+# SPDX-License-Identifier: MIT
 """Scan history — persists results to SQLite for the dashboard."""
 
 import copy
 import json
-import os
 import sqlite3
-import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

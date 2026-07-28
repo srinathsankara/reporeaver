@@ -1,6 +1,7 @@
 """Additional url_analyzer tests — loopback, C2 matching, embedded auth, safe registry, urlparse error."""
 import pytest
-from reporeaver.analyzers.url_analyzer import URLNetworkAnalyzer, KNOWN_C2_DOMAINS
+
+from reporeaver.analyzers.url_analyzer import URLNetworkAnalyzer
 from reporeaver.models import FileEntry
 
 

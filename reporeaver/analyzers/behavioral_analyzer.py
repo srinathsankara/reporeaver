@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Behavioral analysis — looks for code patterns that match malware behaviors.
 
 Groups findings into: network calls, code execution, persistence, data exfiltration.

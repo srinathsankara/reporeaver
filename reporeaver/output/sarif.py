@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """SARIF output — static analysis results interchange format.
 
 GitHub natively displays SARIF in the Security tab.
@@ -5,7 +6,7 @@ GitHub natively displays SARIF in the Security tab.
 
 from typing import Any, Dict, List
 
-from ..models import Finding, Severity, ScanResult
+from ..models import ScanResult, Severity
 
 SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"

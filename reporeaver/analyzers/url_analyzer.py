@@ -1,9 +1,10 @@
+# SPDX-License-Identifier: MIT
 """URL/Network Analyzer — detects external callbacks, C2 indicators, and suspicious URLs."""
 
 import ipaddress
 import logging
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 from urllib.parse import urlparse
 
 log = logging.getLogger("reporeaver.url_network")

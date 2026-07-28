@@ -1,14 +1,20 @@
 """Additional ingest tests for archive edge cases."""
 
-import zipfile
-import tarfile
 import io
-from pathlib import Path
-from reporeaver.ingest.single import (
-    _should_skip_name, _is_bomb, _ingest_zip, _ingest_tar,
-    _extract_archive_bytes, MAX_FILE_SIZE, TOTAL_MAX_SIZE, MAX_FILE_COUNT,
-)
+import tarfile
+import zipfile
+
 from reporeaver.ingest import ArchiveIngester
+from reporeaver.ingest.single import (
+    MAX_FILE_COUNT,
+    MAX_FILE_SIZE,
+    TOTAL_MAX_SIZE,
+    _extract_archive_bytes,
+    _ingest_tar,
+    _ingest_zip,
+    _is_bomb,
+    _should_skip_name,
+)
 
 
 class TestShouldSkipName:
@@ -57,7 +63,7 @@ class TestIngestZip:
 
     def test_ingest_empty_zip(self, tmp_path):
         zpath = tmp_path / "empty.zip"
-        with zipfile.ZipFile(str(zpath), "w") as z:
+        with zipfile.ZipFile(str(zpath), "w") as _:
             pass
         result = _ingest_zip(zpath)
         assert result.total_files == 0

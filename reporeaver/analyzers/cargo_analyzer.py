@@ -1,7 +1,6 @@
+# SPDX-License-Identifier: MIT
 """Cargo/Rust analyzer — checks build.rs, Cargo.toml for build-time code execution risks."""
 
-import configparser
-import io
 import logging
 import re
 from typing import List
@@ -9,7 +8,7 @@ from typing import List
 log = logging.getLogger("reporeaver.cargo")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
-from ..utils.text import trunc, line_of
+from ..utils.text import line_of, trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 
@@ -32,12 +31,6 @@ class CargoAnalyzer(BaseAnalyzer):
 
 def _check_cargo_toml(content: str, path: str) -> AnalyzerResult:
     findings: List[Finding] = []
-
-    try:
-        cfg = configparser.ConfigParser()
-        cfg.read_string(content)
-    except Exception as exc:
-        log.debug("configparser failed on TOML (expected), falling back to regex: %s", exc)
 
     # Check for git dependencies (unpinned)
     for match in re.finditer(r'(?:git|repository)\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE):

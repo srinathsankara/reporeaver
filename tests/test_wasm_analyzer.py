@@ -1,13 +1,19 @@
 """Edge-case tests for wasm_analyzer — all branches."""
-import struct
-import sys
 import pytest
-from reporeaver.analyzers.wasm_analyzer import (
-    WasmAnalyzer, _parse_imports, _parse_exports, _read_leb128, _read_name,
-    WASM_MAGIC, WASM_VERSION, SECTION_IMPORT, SECTION_EXPORT, SECTION_FUNC,
-)
-from reporeaver.models import FileEntry, Severity, Category
 
+from reporeaver.analyzers.wasm_analyzer import (
+    SECTION_EXPORT,
+    SECTION_FUNC,
+    SECTION_IMPORT,
+    WASM_MAGIC,
+    WASM_VERSION,
+    WasmAnalyzer,
+    _parse_exports,
+    _parse_imports,
+    _read_leb128,
+    _read_name,
+)
+from reporeaver.models import FileEntry, Severity
 
 # --- Helpers ---
 

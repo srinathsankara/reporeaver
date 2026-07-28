@@ -1,6 +1,8 @@
 """Additional script analyzer tests — edge cases and uncovered branches."""
 import json
+
 import pytest
+
 from reporeaver.analyzers.script_analyzer import ScriptAnalyzer
 from reporeaver.models import FileEntry
 

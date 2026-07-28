@@ -1,7 +1,7 @@
 """Comprehensive tests for DepAnalyzer — all handlers, error paths, edge cases."""
 
 from reporeaver.analyzers.dep_analyzer import DepAnalyzer
-from reporeaver.models import FileEntry, Category, Severity
+from reporeaver.models import FileEntry, Severity
 
 
 def _entry(path="package.json", is_text=True, size=100):

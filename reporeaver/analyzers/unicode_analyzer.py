@@ -1,10 +1,10 @@
+# SPDX-License-Identifier: MIT
 """Unicode Analyzer — detects zero-width characters, homoglyphs, bidi overrides, and other Unicode tricks."""
 
-import re
 from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
-from ..utils.text import get_context, trunc
+from ..utils.text import get_context
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 ZERO_WIDTH_CHARS = {
@@ -82,8 +82,8 @@ class UnicodeAnalyzer(BaseAnalyzer):
                     findings.append(Finding(
                         path, Severity.MEDIUM, Confidence.HIGH, Category.ZERO_WIDTH_CHAR,
                         title=f"Zero-width/invisible Unicode character: {name}",
-                        description=f"Invisible characters can alter code behavior without being visible "
-                                    f"in editors. Used for obfuscation and hidden control flow.",
+                        description="Invisible characters can alter code behavior without being visible "
+                                    "in editors. Used for obfuscation and hidden control flow.",
                         attack_path="Source appears benign -> invisible chars alter logic -> hidden behavior",
                         remediation="Remove invisible Unicode characters. Use a linter or 'cat -A' to reveal them.",
                         line_number=line_no, snippet=context,

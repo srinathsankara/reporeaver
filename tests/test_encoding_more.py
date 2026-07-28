@@ -1,7 +1,8 @@
 """Additional encoding deobfuscation tests — _is_meaningful edge cases, decode_js_string."""
-import pytest
 from reporeaver.deobfuscation.encoding import (
-    try_decode, decode_js_string, _is_meaningful,
+    _is_meaningful,
+    decode_js_string,
+    try_decode,
 )
 
 

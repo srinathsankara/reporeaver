@@ -1,7 +1,7 @@
 """Tests for the policy engine and YAML config."""
 
-from reporeaver.policy import Policy, load_policy
 from reporeaver.models import Category, Confidence, Finding, Severity
+from reporeaver.policy import Policy, load_policy
 
 
 def _finding(category="c2_callback", severity=Severity.CRITICAL):

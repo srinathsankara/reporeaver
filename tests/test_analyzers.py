@@ -1,17 +1,18 @@
 """Comprehensive tests for all analyzer plugins."""
 
 from pathlib import Path
-from reporeaver.models import Category, FileEntry, Finding, Severity, Confidence
+
+from reporeaver.analyzers.base import all_analyzers
+from reporeaver.analyzers.behavioral_analyzer import BehavioralAnalyzer
+from reporeaver.analyzers.dep_analyzer import DepAnalyzer
+from reporeaver.analyzers.entropy_analyzer import EntropyAnalyzer
+from reporeaver.analyzers.mime_analyzer import MimeDeceptionAnalyzer
+from reporeaver.analyzers.script_analyzer import ScriptAnalyzer
 from reporeaver.analyzers.svg_analyzer import SVGVectorAnalyzer
 from reporeaver.analyzers.unicode_analyzer import UnicodeAnalyzer
-from reporeaver.analyzers.script_analyzer import ScriptAnalyzer
-from reporeaver.analyzers.dep_analyzer import DepAnalyzer
-from reporeaver.analyzers.workflow_analyzer import WorkflowAnalyzer
-from reporeaver.analyzers.entropy_analyzer import EntropyAnalyzer
 from reporeaver.analyzers.url_analyzer import URLNetworkAnalyzer
-from reporeaver.analyzers.mime_analyzer import MimeDeceptionAnalyzer
-from reporeaver.analyzers.behavioral_analyzer import BehavioralAnalyzer
-from reporeaver.analyzers.base import all_analyzers
+from reporeaver.analyzers.workflow_analyzer import WorkflowAnalyzer
+from reporeaver.models import Category, FileEntry, Severity
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Scan pipeline — orchestrates ingestion, analysis, caching, policy, output."""
 
 import hashlib
@@ -14,7 +15,7 @@ from typing import Dict, List, Optional, Tuple
 from .analyzers.base import BaseAnalyzer, discover_analyzers
 from .config import RepoReaverConfig
 from .ingest import select_ingester
-from .models import FileEntry, Finding, ScanResult, RiskScore
+from .models import FileEntry, Finding, RiskScore, ScanResult
 from .policy import evaluate_policy
 
 log = logging.getLogger("reporeaver.pipeline")

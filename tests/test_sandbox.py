@@ -2,6 +2,7 @@
 
 import subprocess
 from unittest.mock import patch
+
 from reporeaver.utils.sandbox import clone_to_temp, safe_tempdir
 
 

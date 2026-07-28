@@ -1,7 +1,8 @@
 """Additional YARA analyzer tests — condition skip, regex error, base64 payload path."""
 
 import re
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from reporeaver.analyzers.yara_analyzer import YaraAnalyzer
 from reporeaver.models import FileEntry
 

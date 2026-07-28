@@ -1,6 +1,7 @@
+# SPDX-License-Identifier: MIT
 """MIME type detection — not trusting file extensions."""
 
-import re
+
 
 MIME_MAP = {
     ".svg": "image/svg+xml",
@@ -42,10 +43,6 @@ MIME_MAP = {
     ".exe": "application/x-msdownload",
     ".dll": "application/x-msdownload",
 }
-
-SCRIPT_EXTS = {".js", ".jsx", ".ts", ".tsx", ".py", ".sh", ".bash", ".ps1", ".bat", ".rb", ".php"}
-CONFIG_EXTS = {".json", ".yaml", ".yml", ".toml", ".ini", ".conf", ".cfg"}
-
 
 def guess_mime(path: str) -> str:
     """Guess MIME type from path. Returns 'application/octet-stream' if unknown."""

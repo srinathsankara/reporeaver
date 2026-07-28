@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Dockerfile analyzer — checks for unsafe patterns in container builds."""
 
 import re

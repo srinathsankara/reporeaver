@@ -1,10 +1,11 @@
 """Integration tests for the scanning engine."""
 
 from pathlib import Path
-from reporeaver.engine import scan_target
-from reporeaver.config import RepoReaverConfig
-from reporeaver.ingest import select_ingester
+
 from reporeaver.analyzers.base import _analyzer_registry
+from reporeaver.config import RepoReaverConfig
+from reporeaver.engine import scan_target
+from reporeaver.ingest import select_ingester
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -32,8 +33,8 @@ class TestEngine:
         assert exit_code == 1
 
     def test_scan_target_benign_dir(self):
-        import tempfile
         import shutil
+        import tempfile
         tmp = tempfile.mkdtemp(prefix="reporeaver_test_")
         try:
             (Path(tmp) / "clean.txt").write_text("hello world")

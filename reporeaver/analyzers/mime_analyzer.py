@@ -1,15 +1,12 @@
+# SPDX-License-Identifier: MIT
 """MIME/File-Type Deception Analyzer — detects extension mismatches, polyglot files, and deceptive naming."""
 
 import re
-from typing import Dict, List, Optional
+from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.known import IMAGE_EXTS
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
-
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".bmp", ".webp"}
-DOC_EXTS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
-ARCHIVE_EXTS = {".zip", ".tar", ".gz", ".rar", ".7z"}
-SCRIPT_EXTS = {".js", ".jsx", ".ts", ".tsx", ".py", ".sh", ".bash", ".ps1", ".bat", ".vbs", ".cmd"}
 
 XML_LIKE_HEADERS = [
     b"<?xml", b"<svg", b"<!DOCTYPE", b"<html", b"<script",
@@ -48,7 +45,6 @@ class MimeDeceptionAnalyzer(BaseAnalyzer):
         low_ext = ext.lower()
 
         content_header = data[:100]
-        is_xml_like = any(content_header.startswith(h) for h in XML_LIKE_HEADERS)
 
         # Check for XML content in non-XML extensions
         if low_ext in IMAGE_EXTS and (SVG_SIGNATURE.search(content_header) or

@@ -1,8 +1,8 @@
 """Tests for deobfuscation modules."""
 
-from reporeaver.deobfuscation.unicode import strip_zero_width, strip_bidi, normalize_homoglyphs, count_zero_width
-from reporeaver.deobfuscation.encoding import try_decode, decode_js_string
-from reporeaver.deobfuscation.js import find_obfuscated_strings, extract_urls_from_script
+from reporeaver.deobfuscation.encoding import decode_js_string, try_decode
+from reporeaver.deobfuscation.js import extract_urls_from_script, find_obfuscated_strings
+from reporeaver.deobfuscation.unicode import count_zero_width, normalize_homoglyphs, strip_bidi, strip_zero_width
 
 
 class TestUnicode:

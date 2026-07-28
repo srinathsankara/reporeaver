@@ -1,7 +1,7 @@
+# SPDX-License-Identifier: MIT
 """Unicode deobfuscation — normalize, detect, and strip Unicode tricks."""
 
-import re
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 ZERO_WIDTH = {
     "\u200b", "\u200c", "\u200d", "\ufeff", "\u2060",

@@ -1,14 +1,21 @@
 """Additional ingest tests — edge cases in _make_entry, DirectoryIngester, and archive error paths."""
 
 import os
-import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 import pytest
+
 from reporeaver.ingest.single import (
-    _make_entry, _build_entry, DirectoryIngester, ArchiveIngester,
-    _ingest_zip, _ingest_tar, _extract_archive_path,
+    ArchiveIngester,
+    DirectoryIngester,
+    _build_entry,
+    _extract_archive_path,
+    _ingest_tar,
+    _ingest_zip,
+    _make_entry,
 )
+
 
 @pytest.mark.skipif(os.name == "nt", reason="symlink requires admin on Windows")
 class TestMakeEntry:

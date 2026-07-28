@@ -1,51 +1,78 @@
 # Contributing to RepoReaver
 
-Thanks for your interest! RepoReaver is a community-driven security tool and we welcome contributions.
-
-## Quick Start
+## Development Setup
 
 ```bash
-git clone https://github.com/srinathsankara/reporeaver.git
+git clone https://github.com/srinathsankara/reporeaver
 cd reporeaver
-pip install -e ".[dev]"
-python -m pytest tests/ -v
+pip install -e ".[dev,dashboard]"
 ```
 
-## How to Contribute
-
-- **Report bugs** — open an issue with the `bug` template
-- **Suggest features** — open an issue with the `feature request` template
-- **Write code** — fork, branch, commit, open a pull request
-
-## Guidelines
-
-- Keep it simple: no unnecessary abstractions
-- All new features need tests (we use pytest)
-- All tests must pass: `python -m pytest tests/ -v`
-- Match existing code style (no docstrings unless the logic is non-obvious)
-- Use `Optional[X]` for Python 3.8/3.9 compatibility
-
-## Adding an Analyzer
-
-1. Create `reporeaver/analyzers/your_analyzer.py`
-2. Subclass `BaseAnalyzer`, implement `should_analyze` and `analyze`
-3. Decorate with `@register_analyzer`
-4. Add tests in `tests/test_new_analyzers.py`
-5. Register it in `engine.py:_register_builtins()`
-
-## Adding a New Category
-
-1. Add the enum value to `models.py:Category`
-2. Wire it through `policy.py` default block list if needed
-3. Add a test
-
-## Pre-commit
+## Running Tests
 
 ```bash
-reporeaver init-precommit
+pytest                       # all tests
+pytest -x --tb=short         # stop at first failure
+pytest --cov=reporeaver      # with coverage
 ```
 
-This runs the scanner on staged files before every commit.
+## Lint & Type Check
+
+```bash
+ruff check .                 # lint (E, F, I, W rules, 120-char lines)
+mypy reporeaver              # type checking
+```
+
+## Adding a New Analyzer
+
+1. Create a file in `reporeaver/analyzers/` (e.g. `reporeaver/analyzers/my_analyzer.py`)
+2. Subclass `BaseAnalyzer` and decorate with `@register_analyzer`
+3. Define `name`, `description`, `priority`, `should_analyze()`, and `analyze()`
+4. Import it in `reporeaver/analyzers/__init__.py`
+5. Add it to `[project.entry-points."reporeaver.analyzers"]` in `pyproject.toml`
+6. Add tests in `tests/test_my_analyzer.py`
+
+```python
+from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
+
+@register_analyzer
+class MyAnalyzer(BaseAnalyzer):
+    name = "my_analyzer"
+    description = "Detects ..."
+    priority = 35
+
+    def should_analyze(self, entry: FileEntry) -> bool:
+        return entry.is_text and entry.path.endswith(".ext")
+
+    def analyze(self, entry: FileEntry, content: str) -> AnalyzerResult:
+        findings = []
+        # ... detection logic ...
+        return AnalyzerResult(findings)
+```
+
+## Adding New Detection Patterns
+
+- **Regex patterns** for scripts/commands: add to `SUSPICIOUS_PATTERNS` in the relevant analyzer
+- **Secret patterns**: add to `SECRET_PATTERNS` in `secrets_analyzer.py` — format is `(regex, severity, category, description, confidence)`
+- **Behavioral patterns**: add to `BEHAVIOR_PATTERNS` dict in `behavioral_analyzer.py`
+- **C2 domains**: add to `KNOWN_C2_DOMAINS` in `url_analyzer.py`
+- **Typosquat targets**: add to `TOP_NPM` set in `dep_analyzer.py`
+
+## Code Style
+
+- Line length: 120 characters
+- Ruff rules: E, F, I, W
+- Docstrings on all public modules, classes, and functions
+- Narrow exception handlers — never bare `except:`
+- Tests for every new detection: one positive (must flag) and one negative (must not false-positive)
+
+## Pull Request Process
+
+1. Ensure all tests pass (`pytest -x`)
+2. Ensure lint passes (`ruff check .`)
+3. Add or update tests for your change
+4. Update README.md if the change affects user-facing behavior
+5. Mark PR as "Ready for review"
 
 ## License
 

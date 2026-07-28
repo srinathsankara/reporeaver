@@ -1,10 +1,11 @@
+# SPDX-License-Identifier: MIT
 """Workflow Analyzer — inspects CI/CD pipelines for unpinned actions, remote exec, secrets exposure, and cross-workflow attacks."""
 
 import re
-from typing import Dict, List, Optional
+from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
-from ..utils.text import trunc, line_of
+from ..utils.text import line_of, trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 WORKFLOW_FILES = {".github/workflows/"}

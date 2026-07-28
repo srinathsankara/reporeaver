@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Scan orchestration — entry point for all scans."""
 
 import json
@@ -6,11 +7,11 @@ from pathlib import Path
 from typing import Optional
 
 from .config import RepoReaverConfig
-from .output.html_dashboard import render_html
-from .output.sarif import render_sarif
-from .output.report import print_report
-from .pipeline import ScanPipeline, EXIT_THRESHOLD
 from .history import save_scan_history
+from .output.html_dashboard import render_html
+from .output.report import print_report
+from .output.sarif import render_sarif
+from .pipeline import EXIT_THRESHOLD, ScanPipeline
 
 log = logging.getLogger("reporeaver.engine")
 

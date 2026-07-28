@@ -1,9 +1,10 @@
+# SPDX-License-Identifier: MIT
 """Dependency Analyzer — typo-squatting, lockfile tampering, lifecycle hooks, malicious indicators."""
 
 import json
 import re
 from difflib import SequenceMatcher
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from ..utils.text import trunc
@@ -114,7 +115,7 @@ class DepAnalyzer(BaseAnalyzer):
                     title=f"Scoped package '{dep_name}' — verify it resolves to the right registry",
                     description="Scoped packages can be public or private. If private but not configured, "
                                 "npm will fall back to public registry — dependency confusion attack.",
-                    attack_path=f"npm install -> scoped package resolved from public registry -> malicious package",
+                    attack_path="npm install -> scoped package resolved from public registry -> malicious package",
                     remediation="Ensure .npmrc has @scope:registry set for private scoped packages.",
                     raw_value=dep_name,
                 ))
@@ -165,7 +166,7 @@ class DepAnalyzer(BaseAnalyzer):
                     path, Severity.HIGH, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
                     title=f"Suspicious prefix on '{name}': '{prefix}' added to '{base[len(prefix):]}'",
                     description=f"Package adds '{prefix}' to a known package name — common squatting pattern.",
-                    attack_path=f"npm install -> prefixed name mistakes -> malicious package",
+                    attack_path="npm install -> prefixed name mistakes -> malicious package",
                     remediation=f"Check if '{prefix}{base[len(prefix):]}' is a legitimate fork or a squat.",
                     raw_value=f"{name}@{version}",
                 ))
@@ -175,7 +176,7 @@ class DepAnalyzer(BaseAnalyzer):
                     path, Severity.HIGH, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
                     title=f"Suspicious suffix on '{name}': adds '{suffix}' to '{base[:-len(suffix)]}'",
                     description=f"Package appends '{suffix}' to a known package — common squatting variant.",
-                    attack_path=f"npm install -> suffixed name -> malicious package",
+                    attack_path="npm install -> suffixed name -> malicious package",
                     remediation=f"Verify this is not a squat mimicking '{base[:-len(suffix)]}'.",
                     raw_value=f"{name}@{version}",
                 ))

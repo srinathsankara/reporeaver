@@ -1,11 +1,10 @@
+# SPDX-License-Identifier: MIT
 """Sandbox utilities — safe environment for scanning."""
 
-import os
 import shutil
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 from typing import Optional
 
 

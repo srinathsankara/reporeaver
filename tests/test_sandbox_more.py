@@ -1,8 +1,8 @@
 """Additional sandbox tests — temp dir cleanup on failure."""
 
 import subprocess
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from reporeaver.utils.sandbox import clone_to_temp
 
 

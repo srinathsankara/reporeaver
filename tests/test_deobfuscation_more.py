@@ -1,10 +1,13 @@
 """Additional deobfuscation tests — trojan source detection and edge cases."""
 
+from reporeaver.deobfuscation.encoding import decode_js_string, try_decode
 from reporeaver.deobfuscation.unicode import (
-    detect_trojan_source, strip_zero_width, strip_bidi, normalize_homoglyphs, count_zero_width,
+    count_zero_width,
+    detect_trojan_source,
+    normalize_homoglyphs,
+    strip_bidi,
+    strip_zero_width,
 )
-from reporeaver.deobfuscation.js import find_obfuscated_strings, extract_urls_from_script
-from reporeaver.deobfuscation.encoding import try_decode, decode_js_string
 
 
 class TestTrojanSource:
@@ -57,7 +60,8 @@ class TestUnicodeExtra:
 
 class TestEncodingMore:
     def test_try_decode_gzip(self):
-        import gzip, base64
+        import base64
+        import gzip
         payload = b"decoded gzip content"
         compressed = base64.b64encode(gzip.compress(payload)).decode()
         result = try_decode(compressed)

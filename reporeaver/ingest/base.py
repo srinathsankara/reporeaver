@@ -1,8 +1,9 @@
+# SPDX-License-Identifier: MIT
 """Base ingester interface."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from ..models import FileEntry
 

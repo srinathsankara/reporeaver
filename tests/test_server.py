@@ -1,7 +1,9 @@
 """Tests for the dashboard server."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
+
 from reporeaver.ui.server import _build_app, serve
 
 

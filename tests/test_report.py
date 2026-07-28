@@ -1,7 +1,8 @@
 """Tests for console report output."""
 
 import json
-from reporeaver.models import Finding, ScanResult, RiskScore, Severity, Confidence, Category
+
+from reporeaver.models import Category, Confidence, Finding, RiskScore, ScanResult, Severity
 from reporeaver.output.report import print_report
 
 

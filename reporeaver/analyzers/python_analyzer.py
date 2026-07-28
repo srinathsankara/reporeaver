@@ -1,10 +1,11 @@
+# SPDX-License-Identifier: MIT
 """Python packaging analyzer — checks setup.py, pyproject.toml, setup.cfg for build-time abuse."""
 
 import re
 from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
-from ..utils.text import trunc, line_of
+from ..utils.text import line_of, trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 SUSPICIOUS_SETUP_CALLS = [

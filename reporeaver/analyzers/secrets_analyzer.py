@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Secrets scanner — flags hardcoded credentials, API keys, tokens, private keys.
 
 Checks for common formats: AWS keys, GitHub tokens, Slack tokens, JWTs, SSH keys,
@@ -11,6 +12,7 @@ from typing import List, NamedTuple
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from ..utils.entropy import shannon
+from ..utils.known import LOCKFILE_NAMES
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 
@@ -130,8 +132,7 @@ SECRET_PATTERNS: List[SecretPattern] = [
 ENTROPY_FLOOR = 4.5
 
 # Files to skip entirely (lockfiles, minified bundles, etc.)
-SKIP_PATHS = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "gemfile.lock",
-              "poetry.lock", "composer.lock"}
+SKIP_PATHS = LOCKFILE_NAMES
 
 # Skip lines that are clearly hashes, not secrets
 HASH_LINE = re.compile(r'^[A-Fa-f0-9]{32,}$')

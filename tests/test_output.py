@@ -1,12 +1,16 @@
 """Tests for output modules."""
 
-import json
 
 from reporeaver.models import (
-    Category, Confidence, Finding, RiskScore, ScanResult, Severity,
+    Category,
+    Confidence,
+    Finding,
+    RiskScore,
+    ScanResult,
+    Severity,
 )
-from reporeaver.output.sarif import render_sarif
 from reporeaver.output.html_dashboard import render_html
+from reporeaver.output.sarif import render_sarif
 
 
 def make_sample_result() -> ScanResult:
@@ -54,7 +58,8 @@ class TestSARIF:
 
 class TestHTML:
     def _render_to_temp(self, result):
-        import os, tempfile
+        import os
+        import tempfile
         tmp = tempfile.mktemp(suffix=".html")
         render_html(result, tmp)
         with open(tmp, encoding="utf-8") as f:

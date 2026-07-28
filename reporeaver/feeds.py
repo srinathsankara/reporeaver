@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Threat intelligence feed integration — OSV, MalwareBazaar, and known C2 feeds.
 
 Fetches and caches vulnerability data for dependency checking.
@@ -8,9 +9,9 @@ import json
 import logging
 import sqlite3
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,9 @@ log = logging.getLogger("reporeaver.feeds")
 
 FEED_DIR = Path.home() / ".reporeaver" / "feeds"
 FEED_DB = FEED_DIR / "feeds.db"
+
+# Hook for test injection — production uses urllib.request.urlopen
+_urlopen = urllib.request.urlopen
 
 # How long to cache feed data before re-fetching
 CACHE_TTL = {
@@ -92,7 +96,7 @@ def query_osv(package_name: str, ecosystem: str = "npm") -> List[Dict]:
             }).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with _urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
         vulns = data.get("vulns", [])
         _set_cache(cache_key, vulns)
@@ -114,7 +118,7 @@ def query_malwarebazaar(hash_sha256: str) -> Optional[Dict]:
     try:
         data = urllib.parse.urlencode({"query": "get_info", "hash": hash_sha256}).encode()
         req = urllib.request.Request(MALWAREBAZAAR_API, data=data)
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with _urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read().decode())
         if result.get("query_status") == "ok" and result.get("data"):
             info = result["data"][0]
@@ -136,7 +140,7 @@ def get_known_c2_domains() -> List[str]:
 
     try:
         req = urllib.request.Request(C2_FEED_URL)
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with _urlopen(req, timeout=15) as resp:
             text = resp.read().decode()
         domains = []
         for line in text.splitlines():

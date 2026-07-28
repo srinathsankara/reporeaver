@@ -1,5 +1,6 @@
 """Additional workflow analyzer tests — uncovered branches."""
 import pytest
+
 from reporeaver.analyzers.workflow_analyzer import WorkflowAnalyzer
 from reporeaver.models import FileEntry
 

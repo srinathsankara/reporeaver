@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """SVG analyzer — scripts, event handlers, XXE, data URIs, foreign objects."""
 
 import base64
@@ -9,7 +10,7 @@ from typing import Optional
 log = logging.getLogger("reporeaver.svg")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
-from ..utils.text import trunc, line_of
+from ..utils.text import line_of, trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 # Event handlers that can fire automatically when SVG renders
@@ -172,7 +173,7 @@ def check_event_handlers(content, path, findings):
             path, Severity.HIGH, Confidence.HIGH, Category.SVG_EVENT_HANDLER,
             title=f"Inline '{match.group(0).split('=')[0]}' handler executes JS",
             description=f"Handler: {trunc(val, 200)}",
-            attack_path=f"SVG rendered -> event fires -> JS executes -> malicious action",
+            attack_path="SVG rendered -> event fires -> JS executes -> malicious action",
             remediation="Remove inline handlers. SVGs should not run code.",
             line_number=line, snippet=val, decoded=decoded,
         ))

@@ -1,10 +1,9 @@
 """Tests for new Phase 1-3 analyzers: secrets, cargo, python, dockerfile, wasm, yara."""
 
-from pathlib import Path
-from reporeaver.analyzers.secrets_analyzer import SecretsAnalyzer
 from reporeaver.analyzers.cargo_analyzer import CargoAnalyzer
-from reporeaver.analyzers.python_analyzer import PythonAnalyzer
 from reporeaver.analyzers.dockerfile_analyzer import DockerfileAnalyzer
+from reporeaver.analyzers.python_analyzer import PythonAnalyzer
+from reporeaver.analyzers.secrets_analyzer import SecretsAnalyzer
 from reporeaver.analyzers.wasm_analyzer import WasmAnalyzer
 from reporeaver.analyzers.yara_analyzer import YaraAnalyzer
 from reporeaver.models import FileEntry, Severity
@@ -167,7 +166,6 @@ class TestWasmAnalyzer:
 
     def test_detects_wasm_magic(self):
         """A minimal valid WASM module has the right magic bytes."""
-        import struct
         # Minimal WASM module with just a header
         wasm = b"\x00asm\x01\x00\x00\x00"
         res = self.a.analyze_binary(_entry("test.wasm"), wasm)

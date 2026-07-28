@@ -1,7 +1,7 @@
+# SPDX-License-Identifier: MIT
 """WASM analyzer — inspects WebAssembly binaries for suspicious imports and behavior."""
 
-import struct
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
@@ -59,10 +59,8 @@ class WasmAnalyzer(BaseAnalyzer):
             pass  # valid v1
 
         imports = _parse_imports(data)
-        exports = _parse_exports(data)
 
         # Check for suspicious imports
-        import_names = {f"{m}.{n}" for m, n in imports}
         has_network = False
         has_exec = False
 

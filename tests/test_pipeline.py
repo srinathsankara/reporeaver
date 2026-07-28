@@ -1,9 +1,7 @@
 """Unit tests for pipeline components: CacheManager, DiffFilter, _read_entry."""
 
-import json
-from pathlib import Path
+from reporeaver.models import Category, Confidence, FileEntry, Finding, Severity
 from reporeaver.pipeline import CacheManager, DiffFilter, _read_entry
-from reporeaver.models import FileEntry, Severity, Confidence, Category, Finding
 
 
 class TestReadEntry:

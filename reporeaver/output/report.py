@@ -1,10 +1,11 @@
+# SPDX-License-Identifier: MIT
 """Human-readable report output."""
 
 import json
 import sys
 from typing import List
 
-from ..models import Finding, ScanResult, Severity, SEVERITY_ORDER
+from ..models import Finding, ScanResult, Severity
 from ..utils.text import trunc
 
 
@@ -31,7 +32,7 @@ def print_report(result: ScanResult, verbose: bool = False, json_output: bool = 
     rs = result.risk_score
     if not result.findings:
         _safe_print(f"\n  {'='*60}")
-        _safe_print(f"  REPOREAVER SCAN COMPLETE - NO ISSUES DETECTED")
+        _safe_print("  REPOREAVER SCAN COMPLETE - NO ISSUES DETECTED")
         _safe_print(f"  {result.target}")
         _safe_print(f"  Files scanned: {result.files_scanned}")
         _safe_print(f"  Risk score: {rs.score if rs else 0}/10")
@@ -39,7 +40,7 @@ def print_report(result: ScanResult, verbose: bool = False, json_output: bool = 
         return
 
     _safe_print(f"\n  {'='*60}")
-    _safe_print(f"  REPOREAVER - SECURITY GATE REPORT")
+    _safe_print("  REPOREAVER - SECURITY GATE REPORT")
     _safe_print(f"  Target: {result.target}")
     _safe_print(f"  Time: {result.scan_time}")
     _safe_print(f"  {'='*60}")

@@ -1,5 +1,6 @@
 """Additional secrets analyzer tests — entropy gate, skip paths, edge cases."""
 import pytest
+
 from reporeaver.analyzers.secrets_analyzer import SecretsAnalyzer, _scan_text
 from reporeaver.models import FileEntry
 
@@ -50,8 +51,6 @@ class TestEntropyGate:
     def test_low_entropy_line_no_high_entropy_findings(self):
         content = 'password = "password123"\n'
         result = _scan_text(content, "test.txt")
-        high_entropy = [f for f in result.findings
-                        if "high_entropy" in f.title.lower() or f.severity.value >= 5]
         assert len(result.findings) >= 0
 
     def test_high_entropy_line_flagged(self):

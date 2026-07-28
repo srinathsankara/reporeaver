@@ -1,11 +1,11 @@
 """Additional pipeline tests — DiffFilter git integration and error handlers."""
 
-import os
 import subprocess
 from pathlib import Path
+
 from reporeaver.config import RepoReaverConfig
-from reporeaver.pipeline import DiffFilter, _read_entry, CacheManager, ScanPipeline, _analyze_file
 from reporeaver.models import FileEntry
+from reporeaver.pipeline import CacheManager, DiffFilter, ScanPipeline, _analyze_file, _read_entry
 
 
 class TestDiffFilterGit:
@@ -48,7 +48,7 @@ class TestCacheManagerExtra:
         assert result is None
 
     def test_cache_set_write_error(self, tmp_path):
-        cm = CacheManager(tmp_path)
+        _ = CacheManager(tmp_path)
         read_only = tmp_path / "readonly"
         read_only.mkdir()
         read_only.chmod(0o444)

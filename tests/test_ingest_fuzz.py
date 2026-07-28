@@ -2,12 +2,18 @@
 
 import io
 import os
-import zipfile
 import tarfile
+import zipfile
 from pathlib import Path
 
-from reporeaver.ingest.base import IngestResult
-from reporeaver.ingest.single import _make_entry, _build_entry, _ingest_zip, _ingest_tar, _extract_archive_bytes, _is_bomb
+from reporeaver.ingest.single import (
+    _build_entry,
+    _extract_archive_bytes,
+    _ingest_tar,
+    _ingest_zip,
+    _is_bomb,
+    _make_entry,
+)
 
 
 def _make_zip(data: bytes) -> bytes:

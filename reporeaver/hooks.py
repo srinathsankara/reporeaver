@@ -1,6 +1,6 @@
+# SPDX-License-Identifier: MIT
 """Pre-commit hook installer — runs reporeaver on staged files before every commit."""
 
-import os
 import stat
 import sys
 from pathlib import Path

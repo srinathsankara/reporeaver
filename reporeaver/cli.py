@@ -1,10 +1,10 @@
+# SPDX-License-Identifier: MIT
 """CLI — scan repos, view dashboard, manage history."""
 
 import argparse
 import sys
 from pathlib import Path
 
-from . import __version__
 from .config import RepoReaverConfig, find_config, load_config
 from .engine import scan_target
 from .logging import setup_logging
@@ -125,7 +125,7 @@ def main():
         serve(host=args.host, port=args.port, open_browser=not args.no_browser)
 
     elif args.command == "history":
-        from .history import get_scans, get_stats, delete_scan
+        from .history import delete_scan, get_scans, get_stats
 
         if args.delete is not None:
             ok = delete_scan(args.delete)

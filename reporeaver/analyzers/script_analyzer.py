@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Script Analyzer — inspects package.json, Makefile, Dockerfile, shell scripts for build-time abuse."""
 
 import json
@@ -5,7 +6,7 @@ import re
 from typing import List, Optional
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
-from ..utils.text import trunc, line_of
+from ..utils.text import line_of, trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 HIGH_RISK_LIFECYCLE = {"preinstall", "install", "postinstall", "preuninstall", "uninstall"}

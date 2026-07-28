@@ -2,12 +2,13 @@
 
 import urllib.error
 from unittest.mock import MagicMock, patch
-from reporeaver.feeds import get_known_c2_domains, check_known_vulnerable
+
+from reporeaver.feeds import check_known_vulnerable, get_known_c2_domains
 
 
 class TestC2Feed:
     @patch("reporeaver.feeds._get_cached", return_value=None)
-    @patch("reporeaver.feeds.urllib.request.urlopen")
+    @patch("reporeaver.feeds._urlopen")
     def test_fetch_parses_ips(self, mock_urlopen, mock_cache):
         mock_resp = MagicMock()
         mock_resp.read.return_value = b"1.2.3.4 12345\n5.6.7.8 54321\n# comment\n9.10.11.12 99999\n"
@@ -20,13 +21,13 @@ class TestC2Feed:
         assert len(domains) == 3
 
     @patch("reporeaver.feeds._get_cached", return_value=None)
-    @patch("reporeaver.feeds.urllib.request.urlopen", side_effect=urllib.error.URLError("fail"))
+    @patch("reporeaver.feeds._urlopen", side_effect=urllib.error.URLError("fail"))
     def test_fetch_network_error(self, mock_urlopen, mock_cache):
         domains = get_known_c2_domains()
         assert domains == []
 
     @patch("reporeaver.feeds._get_cached", return_value=None)
-    @patch("reporeaver.feeds.urllib.request.urlopen", side_effect=OSError("timeout"))
+    @patch("reporeaver.feeds._urlopen", side_effect=OSError("timeout"))
     def test_fetch_os_error(self, mock_urlopen, mock_cache):
         domains = get_known_c2_domains()
         assert domains == []

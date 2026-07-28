@@ -1,9 +1,14 @@
 """Tests for the base analyzer module."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from reporeaver.analyzers.base import (
-    AnalyzerResult, BaseAnalyzer, _analyzer_registry,
-    register_analyzer, all_analyzers, discover_analyzers,
+    AnalyzerResult,
+    BaseAnalyzer,
+    _analyzer_registry,
+    all_analyzers,
+    discover_analyzers,
+    register_analyzer,
 )
 from reporeaver.models import FileEntry, Finding
 

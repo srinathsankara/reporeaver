@@ -1,10 +1,15 @@
 """Additional SVG analyzer tests — uncovered branches."""
 import pytest
+
 from reporeaver.analyzers.svg_analyzer import (
-    SVGVectorAnalyzer, check_scripts, check_data_uris, check_js_uris,
-    check_external_links, try_base64_decode, line_of,
+    SVGVectorAnalyzer,
+    check_data_uris,
+    check_external_links,
+    check_js_uris,
+    check_scripts,
+    try_base64_decode,
 )
-from reporeaver.models import FileEntry, Finding
+from reporeaver.models import FileEntry
 
 
 @pytest.fixture

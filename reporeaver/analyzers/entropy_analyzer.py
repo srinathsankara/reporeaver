@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Entropy Analyzer — detects high-entropy/encoded strings that may hide payloads."""
 
 import logging

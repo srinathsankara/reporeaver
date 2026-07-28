@@ -1,6 +1,7 @@
 """Additional base analyzer tests — entry_point load success path."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from reporeaver.analyzers.base import discover_analyzers
 
 

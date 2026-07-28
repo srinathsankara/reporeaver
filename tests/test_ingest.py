@@ -3,8 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from reporeaver.ingest.single import SingleFileIngester, DirectoryIngester, ArchiveIngester
-from reporeaver.models import FileEntry
+from reporeaver.ingest.single import ArchiveIngester, DirectoryIngester, SingleFileIngester
 
 
 class TestSingleFileIngester:

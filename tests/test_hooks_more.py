@@ -1,7 +1,9 @@
 """Additional hooks tests — error branches."""
 
 from unittest.mock import patch
+
 import pytest
+
 from reporeaver.hooks import install_precommit
 
 

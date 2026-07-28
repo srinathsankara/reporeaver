@@ -1,8 +1,8 @@
+# SPDX-License-Identifier: MIT
 from pathlib import Path
-from typing import Union
 
 from .base import BaseIngester, IngestResult
-from .single import SingleFileIngester, DirectoryIngester, ArchiveIngester
+from .single import ArchiveIngester, DirectoryIngester, SingleFileIngester
 
 
 def select_ingester(path: Path) -> BaseIngester:

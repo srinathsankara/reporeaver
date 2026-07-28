@@ -1,7 +1,8 @@
 """Tests for pre-commit hook installer."""
 
+
 import pytest
-from pathlib import Path
+
 from reporeaver.hooks import install_precommit
 
 

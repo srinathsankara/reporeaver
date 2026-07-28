@@ -1,10 +1,10 @@
 """Additional engine tests — output paths and error branches."""
 
 import json
-from pathlib import Path
 from unittest.mock import patch
-from reporeaver.engine import scan_target
+
 from reporeaver.config import RepoReaverConfig
+from reporeaver.engine import scan_target
 
 
 def _make_config(**kw):
@@ -19,7 +19,7 @@ class TestEngineOutput:
         target.mkdir()
         (target / "clean.txt").write_text("hello")
         out = tmp_path / "report.json"
-        code = scan_target(
+        _ = scan_target(
             target_path=target,
             config=_make_config(),
             output_file=str(out),
@@ -33,7 +33,7 @@ class TestEngineOutput:
         target.mkdir()
         (target / "clean.txt").write_text("hello")
         out = tmp_path / "out.sarif"
-        code = scan_target(
+        _ = scan_target(
             target_path=target,
             config=_make_config(),
             sarif_output=str(out),
@@ -47,7 +47,7 @@ class TestEngineOutput:
         target.mkdir()
         (target / "clean.txt").write_text("hello")
         out = tmp_path / "report.html"
-        code = scan_target(
+        _ = scan_target(
             target_path=target,
             config=_make_config(),
             html_output=str(out),

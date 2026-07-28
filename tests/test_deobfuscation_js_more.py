@@ -1,8 +1,6 @@
 """Additional JS deobfuscation tests — hex decode, fromCharCode with hex, edge cases."""
-import pytest
 from reporeaver.deobfuscation.js import (
-    find_obfuscated_strings, HEX_STRING, UNICODE_STRING,
-    EVAL_B64, FROM_CHARCODE, ENCODED_ARRAY,
+    find_obfuscated_strings,
 )
 
 

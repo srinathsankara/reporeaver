@@ -1,8 +1,8 @@
 """Tests for logging setup."""
 
 import logging
-import os
-from reporeaver.logging import setup_logging, get_logger
+
+from reporeaver.logging import get_logger, setup_logging
 
 
 class TestLogging:

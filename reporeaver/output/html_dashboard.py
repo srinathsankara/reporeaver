@@ -1,8 +1,8 @@
+# SPDX-License-Identifier: MIT
 """Generate self-contained HTML dashboard from scan results."""
 
 import html
 import json
-from typing import Dict, List
 
 from ..models import ScanResult
 

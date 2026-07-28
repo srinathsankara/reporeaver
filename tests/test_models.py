@@ -1,7 +1,13 @@
 """Tests for core data models."""
 
 from reporeaver.models import (
-    Category, Confidence, FileEntry, Finding, RiskScore, ScanResult, Severity,
+    Category,
+    Confidence,
+    FileEntry,
+    Finding,
+    RiskScore,
+    ScanResult,
+    Severity,
 )
 
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """YARA rule engine — matches files against YARA rules for malware detection."""
 
 import logging
@@ -78,7 +79,6 @@ BUILTIN_RULES = [
 ]
 
 YARA_RULE_DIRS = [
-    "/etc/reporeaver/yara",
     os.path.expanduser("~/.reporeaver/yara"),
 ]
 
@@ -90,8 +90,8 @@ class YaraAnalyzer(BaseAnalyzer):
     priority = 7
     slow = True
 
-    def __init__(self, config: Optional[Dict] = None):
-        super().__init__(config)
+    def __init__(self):
+        super().__init__()
         self._yara_compiled = None
         self._init_yara()
 

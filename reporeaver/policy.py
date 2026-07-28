@@ -1,9 +1,11 @@
+# SPDX-License-Identifier: MIT
 """Policy engine — allow/deny rules and compliance checks."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from .models import Category, Confidence, Finding, Severity
+
 
 @dataclass
 class Policy:
@@ -20,7 +22,6 @@ class Policy:
     def evaluate(self, findings: List[Finding]) -> List[Finding]:
         """Apply policy rules and return policy-violation findings."""
         policy_findings = []
-        threshold_val = _severity_value(self.severity_threshold)
 
         for f in findings:
             if any(f.file_path.startswith(p) for p in self.allow_paths):

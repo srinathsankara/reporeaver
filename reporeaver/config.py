@@ -1,10 +1,12 @@
+# SPDX-License-Identifier: MIT
 """Configuration dataclass for RepoReaver scans."""
 
 import logging
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+
+import yaml
 
 log = logging.getLogger("reporeaver.config")
 
@@ -43,13 +45,12 @@ def find_config(target_dir: Optional[Path] = None) -> Optional[Path]:
 def load_config(yaml_path: Path) -> dict:
     """Load a YAML config file and return as a dict. Returns {} on error."""
     try:
-        import yaml
         with open(yaml_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
             log.warning("Config file %s is not a dict, ignoring", yaml_path)
             return {}
         return data
-    except Exception as exc:
+    except (FileNotFoundError, yaml.YAMLError, ValueError) as exc:
         log.debug("Failed to load config %s: %s", yaml_path, exc)
         return {}

@@ -1,7 +1,8 @@
 """Additional CLI tests — main() function path coverage."""
 
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from reporeaver.cli import build_parser, main
 
 

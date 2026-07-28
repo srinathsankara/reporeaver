@@ -1,8 +1,12 @@
+# SPDX-License-Identifier: MIT
 """Base analyzer plugin interface."""
 
 import importlib.metadata
+import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Type
+
+log = logging.getLogger("reporeaver.analyzers")
 
 from ..models import FileEntry, Finding
 
@@ -21,9 +25,6 @@ class BaseAnalyzer(ABC):
     priority: int = 50
     analyze_text: bool = True
     slow: bool = False
-
-    def __init__(self, config: Optional[Dict] = None):
-        self.config = config or {}
 
     @abstractmethod
     def should_analyze(self, entry: FileEntry) -> bool:
@@ -61,10 +62,10 @@ def discover_analyzers() -> Dict[str, Type[BaseAnalyzer]]:
             try:
                 cls = ep.load()
                 found[ep.name] = cls
-            except Exception:
-                continue
-    except Exception:
-        pass
+            except (ImportError, AttributeError, TypeError) as exc:
+                log.debug("Failed to load analyzer %s: %s", ep.name, exc)
+    except Exception as exc:
+        log.debug("Failed to query entry points: %s", exc)
     if not found:
         found.update(_analyzer_registry)
     return found

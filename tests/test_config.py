@@ -1,11 +1,7 @@
 """Tests for scan configuration."""
 
-import json
-import os
 import tempfile
 from pathlib import Path
-
-import pytest
 
 from reporeaver.config import RepoReaverConfig, find_config, load_config
 

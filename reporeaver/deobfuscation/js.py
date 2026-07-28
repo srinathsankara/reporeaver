@@ -1,10 +1,11 @@
+# SPDX-License-Identifier: MIT
 """JavaScript deobfuscation helpers — detect and decode obfuscated JS patterns."""
 
 import base64
 import binascii
 import logging
 import re
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 log = logging.getLogger("reporeaver.deobfuscation.js")
 

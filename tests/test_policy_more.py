@@ -1,6 +1,7 @@
 """Additional policy tests — YAML validation errors."""
 
 import pytest
+
 from reporeaver.policy import load_policy
 
 

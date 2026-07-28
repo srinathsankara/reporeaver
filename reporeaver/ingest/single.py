@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Ingesters for single files, directories, and archives (including nested)."""
 
 import hashlib
@@ -11,9 +12,9 @@ from typing import List, Optional, Set
 log = logging.getLogger("reporeaver.ingest")
 
 from ..models import FileEntry
+from ..utils.known import ARCHIVE_EXTS
 from ..utils.mime_detect import guess_mime
 from .base import BaseIngester, IngestResult
-
 
 IGNORE_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv",
@@ -31,9 +32,6 @@ IGNORE_EXTS = {
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per-file limit
 TOTAL_MAX_SIZE = 500 * 1024 * 1024  # 500MB total decompressed limit
 MAX_FILE_COUNT = 10_000  # prevent zip bomb metadata exhaustion
-ARCHIVE_EXTS = {".zip", ".tar", ".gz", ".tgz", ".rar", ".7z"}
-
-
 class SingleFileIngester(BaseIngester):
     def ingest(self, source: str) -> IngestResult:
         p = Path(source)

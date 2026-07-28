@@ -1,7 +1,8 @@
 """Targeted tests for EntropyAnalyzer edge cases."""
 
 import base64
-from reporeaver.analyzers.entropy_analyzer import EntropyAnalyzer, _try_decode, _has_meaningful_content
+
+from reporeaver.analyzers.entropy_analyzer import EntropyAnalyzer, _has_meaningful_content, _try_decode
 from reporeaver.models import FileEntry
 
 
@@ -26,7 +27,8 @@ class TestEntropyAnalyzer:
         assert len(res.findings) == 0
 
     def test_b64_meaningful_detected(self):
-        import random, string
+        import random
+        import string
         random.seed(12345)
         chars = string.ascii_letters + string.digits + string.punctuation + " "
         long_text = "".join(random.choices(chars, k=5000))

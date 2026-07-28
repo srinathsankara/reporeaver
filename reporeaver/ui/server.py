@@ -1,6 +1,6 @@
+# SPDX-License-Identifier: MIT
 """Dashboard server — local web UI for scan history with optional token auth."""
 
-import json
 import os
 import sys
 import webbrowser
@@ -15,8 +15,8 @@ def _build_app(auth_token: Optional[str] = None):
     from fastapi import FastAPI, HTTPException, Query, Request
     from fastapi.responses import HTMLResponse, JSONResponse
 
-    from ..history import get_scan_by_id, get_scans, get_stats, delete_scan
     from .. import __version__
+    from ..history import delete_scan, get_scan_by_id, get_scans, get_stats
 
     if not auth_token:
         auth_token = os.environ.get("REPOREAVER_DASHBOARD_TOKEN")
