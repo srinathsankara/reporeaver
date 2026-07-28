@@ -12,7 +12,7 @@ from typing import List, Optional, Set
 log = logging.getLogger("reporeaver.ingest")
 
 from ..models import FileEntry
-from ..utils.known import ARCHIVE_EXTS
+from ..utils.known import ARCHIVE_EXTS, CONFIG_EXTS, SCRIPT_EXTS
 from ..utils.mime_detect import guess_mime
 from .base import BaseIngester, IngestResult
 
@@ -304,8 +304,6 @@ def _build_entry(fpath: str, size: int, mime: str, ext: str,
         hash_sha256=hash_val,
         is_text="text" in (mime or ""),
         is_svg=fpath.lower().endswith(".svg"),
-        is_script=fpath.lower().endswith((".js", ".jsx", ".ts", ".tsx",
-                                          ".py", ".sh", ".ps1", ".bat")),
-        is_config=fpath.lower().endswith((".json", ".yaml", ".yml",
-                                          ".toml", ".ini", ".conf")),
+        is_script=fpath.lower().endswith(tuple(SCRIPT_EXTS)),
+        is_config=fpath.lower().endswith(tuple(CONFIG_EXTS)),
     )

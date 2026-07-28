@@ -22,11 +22,12 @@ class Policy:
     def evaluate(self, findings: List[Finding]) -> List[Finding]:
         """Apply policy rules and return policy-violation findings."""
         policy_findings = []
+        min_val = _severity_value(self.severity_threshold)
 
         for f in findings:
             if any(f.file_path.startswith(p) for p in self.allow_paths):
                 continue
-            if f.category.value in self.block_categories:
+            if f.category.value in self.block_categories and _severity_value(f.severity.value) >= min_val:
                 policy_findings.append(Finding(
                     file_path=f.file_path,
                     severity=Severity.CRITICAL,
