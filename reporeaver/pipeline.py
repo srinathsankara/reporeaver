@@ -241,10 +241,16 @@ class ScanPipeline:
         return result, elapsed
 
     def _load_analyzers(self) -> Tuple[List[BaseAnalyzer], List[BaseAnalyzer]]:
+        skip_names = set(self._config.skip_analyzers or [])
         text = []
         binary = []
         for cls in discover_analyzers().values():
             inst = cls()
+            name = getattr(inst, "name", cls.__name__)
+            if name in skip_names:
+                continue
+            if self._config.quick_mode and getattr(inst, "slow", False):
+                continue
             if inst.analyze_text:
                 text.append(inst)
             else:

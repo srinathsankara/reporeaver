@@ -25,6 +25,7 @@ class EntropyAnalyzer(BaseAnalyzer):
     name = "entropy"
     description = "High-entropy string detection — finds encoded/obfuscated payloads"
     priority = 35
+    slow = True
 
     def should_analyze(self, entry: FileEntry) -> bool:
         return entry.is_text and entry.size < 2_000_000

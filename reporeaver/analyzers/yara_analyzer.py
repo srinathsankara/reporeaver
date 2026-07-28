@@ -86,8 +86,9 @@ YARA_RULE_DIRS = [
 @register_analyzer
 class YaraAnalyzer(BaseAnalyzer):
     name = "yara"
-    description = "YARA rule matching — built-in + custom rules for malware detection"
+    description = "YARA-style pattern matching — detects malware, webshells, obfuscated scripts"
     priority = 7
+    slow = True
 
     def __init__(self, config: Optional[Dict] = None):
         super().__init__(config)

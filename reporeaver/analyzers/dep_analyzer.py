@@ -60,8 +60,8 @@ class DepAnalyzer(BaseAnalyzer):
     def should_analyze(self, entry: FileEntry) -> bool:
         name = entry.path.rsplit("/", 1)[-1].lower()
         return name in ("package.json", "package-lock.json", "yarn.lock",
-                        "pnpm-lock.yaml", "requirements.txt", "Pipfile",
-                        "Pipfile.lock", "Gemfile", "Gemfile.lock",
+                        "pnpm-lock.yaml", "requirements.txt", "pipfile",
+                        "pipfile.lock", "gemfile", "gemfile.lock",
                         "go.mod", "go.sum")
 
     def analyze(self, entry: FileEntry, content: str) -> AnalyzerResult:
@@ -75,10 +75,20 @@ class DepAnalyzer(BaseAnalyzer):
             self._analyze_npm_lock(content, path, findings)
         elif name == "yarn.lock":
             self._analyze_yarn_lock(content, path, findings)
-        elif name in ("requirements.txt", "Pipfile"):
+        elif name in ("requirements.txt", "pipfile"):
             self._analyze_python(content, path, findings)
-        elif name in ("Gemfile",):
+        elif name in ("gemfile",):
             self._analyze_ruby(content, path, findings)
+        elif name == "pnpm-lock.yaml":
+            self._analyze_pnpm_lock(content, path, findings)
+        elif name == "pipfile.lock":
+            self._analyze_pipfile_lock(content, path, findings)
+        elif name == "gemfile.lock":
+            self._analyze_gemfile_lock(content, path, findings)
+        elif name == "go.mod":
+            self._analyze_go_mod(content, path, findings)
+        elif name == "go.sum":
+            self._analyze_go_sum(content, path, findings)
 
         return AnalyzerResult(findings)
 
@@ -249,7 +259,9 @@ class DepAnalyzer(BaseAnalyzer):
     def _analyze_python(self, content: str, path: str, findings: List[Finding]):
         for line_no, line in enumerate(content.splitlines(), 1):
             stripped = line.strip()
-            if not stripped or stripped.startswith(("#", "-", "//")):
+            if not stripped or stripped.startswith(("#", "//")):
+                continue
+            if stripped.startswith("-") and not stripped.startswith("-e "):
                 continue
             if "@" in stripped and "://" in stripped:
                 findings.append(Finding(
@@ -283,6 +295,108 @@ class DepAnalyzer(BaseAnalyzer):
                     attack_path="bundle install -> gem from external source -> potential compromise",
                     remediation="Use rubygems.org sources with lockfiles.",
                     line_number=line_no, snippet=line.strip(),
+                ))
+
+    # --------------- pnpm lockfile ---------------
+
+    def _analyze_pnpm_lock(self, content: str, path: str, findings: List[Finding]):
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("resolved:") and "https://" in stripped:
+                url = stripped.split("resolved:")[-1].strip().strip("\"'")
+                if NPM_REGISTRY not in url:
+                    findings.append(Finding(
+                        path, Severity.CRITICAL, Confidence.HIGH, Category.URL_DEPENDENCY,
+                        title=f"pnpm lockfile resolves to external URL: {trunc(url, 100)}",
+                        description=f"Package resolved to non-registry URL: {url}",
+                        attack_path="pnpm install -> fetches from external URL -> malicious package",
+                        remediation="Verify the URL and run `pnpm install --lockfile-only` to reset.",
+                        raw_value=url,
+                    ))
+
+    # --------------- Pipfile.lock ---------------
+
+    def _analyze_pipfile_lock(self, content: str, path: str, findings: List[Finding]):
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            return
+        for section in ("default", "develop"):
+            pkgs = data.get(section, {}) or {}
+            for pkg_name, info in pkgs.items():
+                if not isinstance(info, dict):
+                    continue
+                version = info.get("version", "")
+                if isinstance(version, str) and "://" in version:
+                    findings.append(Finding(
+                        path, Severity.HIGH, Confidence.MEDIUM, Category.URL_DEPENDENCY,
+                        title=f"Pipfile.lock URL dependency: {pkg_name} -> {trunc(version, 100)}",
+                        description=f"Package '{pkg_name}' pins a URL-based version: {version}",
+                        attack_path="pip install -> URL dependency -> arbitrary code",
+                        remediation="Use PyPI versions with hash verification.",
+                        raw_value=f"{pkg_name}=={version}",
+                    ))
+
+    # --------------- Gemfile.lock ---------------
+
+    def _analyze_gemfile_lock(self, content: str, path: str, findings: List[Finding]):
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("remote:") and "https://" in stripped:
+                url = stripped.split("remote:")[-1].strip().strip("\"'")
+                if "rubygems.org" not in url:
+                    findings.append(Finding(
+                        path, Severity.MEDIUM, Confidence.LOW, Category.URL_DEPENDENCY,
+                        title=f"Gemfile.lock remote outside rubygems.org: {trunc(url, 100)}",
+                        description=f"Lockfile uses non-standard remote: {url}",
+                        attack_path="bundle install -> gem from external remote -> potential compromise",
+                        remediation="Use rubygems.org as the sole source in Gemfile.",
+                        raw_value=url,
+                    ))
+
+    # --------------- go.mod ---------------
+
+    def _analyze_go_mod(self, content: str, path: str, findings: List[Finding]):
+        for line_no, line in enumerate(content.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("replace ") and "=>" in stripped:
+                findings.append(Finding(
+                    path, Severity.MEDIUM, Confidence.LOW, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Go module replace directive: {trunc(stripped, 120)}",
+                    description="Replace directives redirect a module version, potentially to a fork or local path.",
+                    attack_path="go build -> replace directive -> unexpected module source",
+                    remediation="Audit all replace directives. Avoid in production builds.",
+                    line_number=line_no, snippet=stripped,
+                ))
+            if stripped.startswith("// ") and "indirect" in stripped.lower() and "://" in stripped:
+                findings.append(Finding(
+                    path, Severity.INFO, Confidence.LOW, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Go module comment references URL: {trunc(stripped, 120)}",
+                    description="Indirect dependency comment contains a URL — verify the source.",
+                    attack_path=None,
+                    remediation="Run `go mod tidy` to ensure consistent state.",
+                    line_number=line_no, snippet=stripped,
+                ))
+
+    # --------------- go.sum ---------------
+
+    def _analyze_go_sum(self, content: str, path: str, findings: List[Finding]):
+        for line_no, line in enumerate(content.splitlines(), 1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            parts = stripped.split()
+            if len(parts) < 3:
+                continue
+            module, version, algo_hash = parts[0], parts[1], parts[2]
+            if not algo_hash.startswith("h1:"):
+                findings.append(Finding(
+                    path, Severity.LOW, Confidence.LOW, Category.SUSPICIOUS_DEPENDENCY,
+                    title=f"Non-standard go.sum hash: {trunc(algo_hash, 40)}",
+                    description=f"Module '{module}@{version}' uses non-standard hash: {algo_hash}",
+                    attack_path="go mod verify -> unexpected hash algorithm",
+                    remediation="Run `go mod verify` and review if the hash type is legitimate.",
+                    line_number=line_no, snippet=stripped,
                 ))
 
 

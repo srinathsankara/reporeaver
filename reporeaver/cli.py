@@ -42,6 +42,8 @@ def build_parser():
     scan.add_argument("--no-history", action="store_true", help="Don't save to history DB")
     scan.add_argument("--diff-only", action="store_true", dest="diff_mode",
                       help="Only scan files changed vs origin/main")
+    scan.add_argument("--quick", action="store_true",
+                      help="Skip slow/expensive analyzers (yara, entropy)")
     scan.add_argument("--no-cache", action="store_true", dest="no_cache",
                       help="Disable content-based caching")
 
@@ -87,6 +89,7 @@ def main():
             max_size_mb=args.max_size,
             policy=args.policy,
             skip_analyzers=skip_list,
+            quick_mode=args.quick,
             no_cache=args.no_cache,
         )
         save_history = not args.no_history

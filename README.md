@@ -68,6 +68,7 @@ reporeaver scan archive.zip --html report.html   # Scan archive, generate HTML d
 reporeaver scan . --diff-only                    # Only scan files changed in this branch
 reporeaver scan . --skip entropy,behavioral      # Disable specific analyzers
 reporeaver scan . --no-cache                     # Disable content-based caching
+reporeaver scan . --quick                          # Skip slow analyzers (yara, entropy)
 reporeaver scan . --policy my-policy.yaml        # Custom policy file
 ```
 
@@ -101,10 +102,25 @@ reporeaver dashboard --host 0.0.0.0 --port 9000
 
 ### Pre-commit Hook
 
+Two ways to use:
+
+**1. Built-in installer** — copies a hook script into `.git/hooks/`:
 ```bash
 reporeaver init-precommit                        # Installs hook into .git/hooks/
 # Runs on staged files before every commit. Bypass with: git commit --no-verify
+reporeaver init-precommit --target-dir /path/to/repo  # Custom repo root
 ```
+
+**2. pre-commit framework** — add to `.pre-commit-config.yaml`:
+```yaml
+repos:
+  - repo: https://github.com/srinathsankara/reporeaver
+    rev: v0.2.0
+    hooks:
+      - id: reporeaver
+```
+
+The hook runs `reporeaver scan --diff-only` on all staged text files and blocks the commit if critical findings are detected.
 
 ### Configuration Files
 
@@ -125,6 +141,8 @@ policy: my-policy.yaml
 
 ## GitHub Action
 
+Add RepoReaver as a step in your workflow. See [action.yml](action.yml) for all inputs.
+
 ```yaml
 # .github/workflows/reporeaver.yml
 name: RepoReaver Security Gate
@@ -134,13 +152,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: reporeaver/reporeaver@v1
+      - name: Run RepoReaver
+        uses: reporeaver/reporeaver@v1
         with:
           target: .
           severity-threshold: high
           diff-only: true
-          github-token: ${{ github.token }}
 ```
+
+**Inputs:**
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `target` | `.` | Path to scan (repo root by default) |
+| `severity-threshold` | `high` | Fail CI if max severity >= this (`low`, `medium`, `high`, `critical`) |
+| `diff-only` | `true` | Only scan files changed vs `origin/main` |
+| `skip-analyzers` | `''` | Comma-separated analyzer names to skip |
+
+**Outputs:**
+
+| Output | Description |
+|--------|-------------|
+| `risk-score` | Numerical risk score (0–10) |
+| `passed` | `true` if risk score below threshold |
 
 The Action:
 - Fails CI if risk score exceeds threshold

@@ -20,6 +20,7 @@ class BaseAnalyzer(ABC):
     description: str = ""
     priority: int = 50
     analyze_text: bool = True
+    slow: bool = False
 
     def __init__(self, config: Optional[Dict] = None):
         self.config = config or {}

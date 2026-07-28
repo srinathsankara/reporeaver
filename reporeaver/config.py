@@ -14,4 +14,5 @@ class RepoReaverConfig:
     max_size_mb: float = 2.0
     policy: Optional[str] = None
     skip_analyzers: Optional[List[str]] = None
+    quick_mode: bool = False
     no_cache: bool = False

@@ -24,7 +24,23 @@ h2{color:#f0f6fc;margin:20px 0 10px;font-size:18px}
 .filter-btn{padding:8px 16px;border:1px solid #30363d;border-radius:6px;background:#161b22;color:#c9d1d9;cursor:pointer;font-size:13px}
 .filter-btn:hover{background:#21262d}
 .filter-btn.active{border-color:#58a6ff;color:#58a6ff}
-.finding{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin:12px 0}
+.search-box{width:100%;max-width:400px;padding:8px 12px;border:1px solid #30363d;border-radius:6px;background:#0d1117;color:#c9d1d9;font-size:14px;margin-bottom:16px}
+.search-box::placeholder{color:#484f58}
+.bar-chart{display:flex;gap:8px;align-items:flex-end;height:100px;margin:20px 0;padding:10px;background:#161b22;border:1px solid #30363d;border-radius:8px}
+.bar{display:flex;flex-direction:column;align-items:center;flex:1;height:100%;justify-content:flex-end}
+.bar-fill{border-radius:4px 4px 0 0;min-height:4px;width:100%;max-width:60px;transition:height .3s}
+.bar-fill.critical{background:#f85149}
+.bar-fill.high{background:#d29922}
+.bar-fill.medium{background:#58a6ff}
+.bar-fill.low{background:#3fb950}
+.bar-label{font-size:11px;color:#8b949e;margin-top:4px;text-transform:capitalize}
+.bar-count{font-size:18px;font-weight:700;margin-bottom:4px}
+.file-group{margin:16px 0}
+.file-group-header{background:#1c2128;border:1px solid #30363d;border-radius:6px;padding:10px 14px;cursor:pointer;font-size:14px;font-weight:600;color:#f0f6fc;display:flex;justify-content:space-between;align-items:center}
+.file-group-header:hover{background:#21262d}
+.file-group-header .count{font-size:12px;color:#8b949e;font-weight:400}
+.file-group-findings{padding-left:12px;border-left:2px solid #30363d;margin-left:8px}
+.finding{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin:8px 0}
 .finding.critical{border-left:4px solid #f85149}
 .finding.high{border-left:4px solid #d29922}
 .finding.medium{border-left:4px solid #58a6ff}
@@ -38,7 +54,6 @@ h2{color:#f0f6fc;margin:20px 0 10px;font-size:18px}
 .severity-low{background:#3fb95020;color:#3fb950;border:1px solid #3fb95040}
 .finding-meta{font-size:12px;color:#8b949e;margin:6px 0}
 .finding-desc{font-size:13px;color:#c9d1d9;margin:8px 0;line-height:1.5}
-.finding-path{font-size:12px;color:#8b949e;margin-top:4px}
 pre{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;margin:8px 0;overflow-x:auto;font-size:12px;color:#7ee787}
 .summary-bar{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin:20px 0}
 .summary-bar .stat{display:inline-block;margin-right:24px}
@@ -50,44 +65,89 @@ pre{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;m
 DASHBOARD_JS = """
 let findings = [];
 let filterSeverity = null;
+let searchText = '';
 
 function escapeHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function getSeverityCount(sev) {
+  return findings.filter(f => f.severity === sev).length;
+}
+
+function renderChart() {
+  const chart = document.getElementById('bar-chart');
+  if (!chart) return;
+  const sevs = ['critical','high','medium','low'];
+  const counts = sevs.map(s => getSeverityCount(s));
+  const max = Math.max(...counts, 1);
+  chart.innerHTML = sevs.map((sev, i) => {
+    const pct = (counts[i] / max) * 80 + 4;
+    return `<div class="bar"><div class="bar-count">${counts[i]}</div><div class="bar-fill ${sev}" style="height:${pct}px"></div><div class="bar-label">${sev}</div></div>`;
+  }).join('');
+}
+
 function render() {
   const container = document.getElementById('findings');
   container.innerHTML = '';
-  const filtered = filterSeverity
+  let filtered = filterSeverity
     ? findings.filter(f => f.severity === filterSeverity)
     : findings;
+  if (searchText) {
+    const q = searchText.toLowerCase();
+    filtered = filtered.filter(f =>
+      (f.file || '').toLowerCase().includes(q) ||
+      (f.title || '').toLowerCase().includes(q) ||
+      (f.description || '').toLowerCase().includes(q)
+    );
+  }
 
   if (filtered.length === 0) {
     container.innerHTML = '<p style="color:#8b949e;text-align:center;padding:40px">No findings match this filter.</p>';
+    renderChart();
     return;
   }
 
+  const groups = {};
   filtered.forEach(f => {
-    const sev = f.severity || 'info';
-    const div = document.createElement('div');
-    div.className = `finding ${sev}`;
-    div.innerHTML = `
-      <div class="finding-header">
-        <span class="finding-title">${escapeHtml(f.title)}</span>
-        <span class="finding-severity severity-${sev}">${sev}</span>
-      </div>
-      <div class="finding-meta">
-        ${escapeHtml(f.file)}${f.line ? ', line ' + f.line : ''} &middot; confidence: ${f.confidence || 'medium'}
-      </div>
-      ${f.description ? `<div class="finding-desc">${escapeHtml(f.description)}</div>` : ''}
-      ${f.attack_path ? `<pre>Attack chain: ${escapeHtml(f.attack_path)}</pre>` : ''}
-      ${f.remediation ? `<pre>Remediation: ${escapeHtml(f.remediation)}</pre>` : ''}
-      ${f.decoded ? `<pre>Decoded: ${escapeHtml(f.decoded)}</pre>` : ''}
-      ${f.raw ? `<pre>Raw: ${escapeHtml(f.raw)}</pre>` : ''}
-    `;
-    container.appendChild(div);
+    const fp = f.file || '<unknown>';
+    if (!groups[fp]) groups[fp] = [];
+    groups[fp].push(f);
   });
+
+  const sortedFiles = Object.keys(groups).sort();
+  sortedFiles.forEach(fp => {
+    const items = groups[fp];
+    const group = document.createElement('div');
+    group.className = 'file-group';
+    group.innerHTML = `<div class="file-group-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+      ${escapeHtml(fp)} <span class="count">${items.length} finding${items.length > 1 ? 's' : ''}</span>
+    </div><div class="file-group-findings">`;
+    items.forEach(f => {
+      const sev = f.severity || 'info';
+      const div = document.createElement('div');
+      div.className = `finding ${sev}`;
+      div.innerHTML = `
+        <div class="finding-header">
+          <span class="finding-title">${escapeHtml(f.title)}</span>
+          <span class="finding-severity severity-${sev}">${sev}</span>
+        </div>
+        <div class="finding-meta">
+          ${f.line ? 'line ' + f.line + ' &middot; ' : ''}confidence: ${f.confidence || 'medium'}
+        </div>
+        ${f.description ? `<div class="finding-desc">${escapeHtml(f.description)}</div>` : ''}
+        ${f.attack_path ? `<pre>Attack chain: ${escapeHtml(f.attack_path)}</pre>` : ''}
+        ${f.remediation ? `<pre>Remediation: ${escapeHtml(f.remediation)}</pre>` : ''}
+        ${f.decoded ? `<pre>Decoded: ${escapeHtml(f.decoded)}</pre>` : ''}
+        ${f.raw ? `<pre>Raw: ${escapeHtml(f.raw)}</pre>` : ''}
+      `;
+      group.querySelector('.file-group-findings').appendChild(div);
+    });
+    container.appendChild(group);
+  });
+
+  renderChart();
 }
 
 function setFilter(sev) {
@@ -95,6 +155,11 @@ function setFilter(sev) {
   document.querySelectorAll('.filter-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.severity === (sev || 'all'));
   });
+  render();
+}
+
+function onSearch(e) {
+  searchText = e.value;
   render();
 }
 """
@@ -143,6 +208,8 @@ def render_html(result: ScanResult, output_path: str):
   </div>
 </div>
 
+<div id="bar-chart" class="bar-chart"></div>
+
 <div class="severity-filters">
   <button class="filter-btn active" data-severity="all" onclick="setFilter(null)">All ({html.escape(str(risk.get("total", 0)))})</button>
   <button class="filter-btn" data-severity="critical" onclick="setFilter('critical')">Critical ({html.escape(str(risk.get("critical", 0)))})</button>
@@ -150,6 +217,8 @@ def render_html(result: ScanResult, output_path: str):
   <button class="filter-btn" data-severity="medium" onclick="setFilter('medium')">Medium ({html.escape(str(risk.get("medium", 0)))})</button>
   <button class="filter-btn" data-severity="low" onclick="setFilter('low')">Low ({html.escape(str(risk.get("low", 0)))})</button>
 </div>
+
+<input class="search-box" type="text" placeholder="Search findings by file, title, or description..." oninput="onSearch(this)">
 
 <div id="findings"></div>
 
