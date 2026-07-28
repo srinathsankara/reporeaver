@@ -37,6 +37,7 @@ class WasmAnalyzer(BaseAnalyzer):
     name = "wasm_analyzer"
     description = "WebAssembly binary analysis: suspicious imports, capabilities, risk assessment"
     priority = 48
+    analyze_text = False
 
     def should_analyze(self, entry: FileEntry) -> bool:
         name = entry.path.rsplit("/", 1)[-1].lower()

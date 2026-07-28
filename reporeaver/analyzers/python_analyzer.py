@@ -4,6 +4,7 @@ import re
 from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc, line_of
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 SUSPICIOUS_SETUP_CALLS = [
@@ -64,10 +65,10 @@ def _check_setup_py(content: str, path: str) -> AnalyzerResult:
                 findings.append(Finding(
                     path, severity, Confidence.MEDIUM, Category.SUSPICIOUS_COMMAND,
                     title=f"setup.py: {desc}",
-                    description=f"Line {line_no} in setup.py: {_trunc(stripped, 150)}",
+                    description=f"Line {line_no} in setup.py: {trunc(stripped, 150)}",
                     attack_path="pip install -> setup.py runs -> build-time code executes -> compromise",
                     remediation="Remove suspicious operations from setup.py. Use declarative config in pyproject.toml.",
-                    line_number=line_no, snippet=_trunc(stripped, 200),
+                    line_number=line_no, snippet=trunc(stripped, 200),
                 ))
 
     return AnalyzerResult(findings)
@@ -81,18 +82,13 @@ def _check_pyproject_toml(content: str, path: str) -> AnalyzerResult:
             findings.append(Finding(
                 path, severity, Confidence.MEDIUM, Category.SUSPICIOUS_COMMAND,
                 title=f"pyproject.toml: {desc}",
-                description=f"Found: {_trunc(match.group(0), 100)}",
+                description=f"Found: {trunc(match.group(0), 100)}",
                 attack_path="pip install -> build backend runs -> arbitrary build code executes",
                 remediation="Use well-known build backends (setuptools, poetry, flit). Pin versions.",
-                line_number=_line_of(content, match.start()),
+                line_number=line_of(content, match.start()),
             ))
 
     return AnalyzerResult(findings)
 
 
-def _line_of(content: str, pos: int) -> int:
-    return content[:pos].count("\n") + 1
 
-
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s

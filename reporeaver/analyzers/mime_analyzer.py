@@ -33,6 +33,7 @@ class MimeDeceptionAnalyzer(BaseAnalyzer):
     name = "mime_deception"
     description = "Detects file extension MIME mismatches, polyglots, and naming deception"
     priority = 5
+    analyze_text = False
 
     def should_analyze(self, entry: FileEntry) -> bool:
         return entry.size > 0

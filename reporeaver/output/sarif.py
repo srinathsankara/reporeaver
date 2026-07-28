@@ -23,11 +23,13 @@ LEVEL_MAP = {
 def render_sarif(result: ScanResult) -> Dict[str, Any]:
     """Render scan result as SARIF 2.1.0 document."""
     rules: Dict[str, dict] = {}
+    rule_index_map: Dict[str, int] = {}
     results: List[dict] = []
 
     for i, f in enumerate(result.findings):
         rule_id = f"RR-{f.category.value.upper()}"
         if rule_id not in rules:
+            rule_index_map[rule_id] = len(rules)
             rules[rule_id] = {
                 "id": rule_id,
                 "name": f.category.value,
@@ -45,7 +47,7 @@ def render_sarif(result: ScanResult) -> Dict[str, Any]:
 
         result_entry = {
             "ruleId": rule_id,
-            "ruleIndex": list(rules.keys()).index(rule_id),
+            "ruleIndex": rule_index_map[rule_id],
             "level": LEVEL_MAP.get(f.severity, "warning"),
             "message": {
                 "text": f"{f.title}: {f.description}" if f.description else f.title,

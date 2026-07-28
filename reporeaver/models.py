@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from .utils.text import trunc
+
 
 class Severity(Enum):
     CRITICAL = "critical"
@@ -80,6 +82,23 @@ class Finding:
     decoded: Optional[str] = None
     raw_value: Optional[str] = None
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "Finding":
+        return cls(
+            file_path=d["file"],
+            severity=Severity(d["severity"]),
+            confidence=Confidence(d["confidence"]),
+            category=Category(d["category"]),
+            title=d["title"],
+            description=d["description"],
+            attack_path=d.get("attack_path"),
+            remediation=d.get("remediation"),
+            line_number=d.get("line"),
+            snippet=d.get("snippet"),
+            decoded=d.get("decoded"),
+            raw_value=d.get("raw"),
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "file": self.file_path,
@@ -91,9 +110,9 @@ class Finding:
             "attack_path": self.attack_path,
             "remediation": self.remediation,
             "line": self.line_number,
-            "snippet": _trunc(self.snippet, 300),
-            "decoded": _trunc(self.decoded, 500),
-            "raw": _trunc(self.raw_value, 200),
+            "snippet": trunc(self.snippet, 300) if self.snippet is not None else None,
+            "decoded": trunc(self.decoded, 500) if self.decoded is not None else None,
+            "raw": trunc(self.raw_value, 200) if self.raw_value is not None else None,
         }
 
     def __repr__(self) -> str:
@@ -128,11 +147,11 @@ class RiskScore:
         c = sum(1 for f in findings if f.severity == Severity.CRITICAL)
         h = sum(1 for f in findings if f.severity == Severity.HIGH)
         m = sum(1 for f in findings if f.severity == Severity.MEDIUM)
-        l = sum(1 for f in findings if f.severity == Severity.LOW)
+        low_count = sum(1 for f in findings if f.severity == Severity.LOW)
         # rough heuristic: 3 pts per critical, 1.5 per high, 0.5 per medium
         score = min(10.0, c * 3.0 + h * 1.5 + m * 0.5)
-        max_sev = Severity.CRITICAL if c else Severity.HIGH if h else Severity.MEDIUM if m else Severity.LOW if l else Severity.INFO
-        return cls(score, max_sev, c, h, m, l, len(findings))
+        max_sev = Severity.CRITICAL if c else Severity.HIGH if h else Severity.MEDIUM if m else Severity.LOW if low_count else Severity.INFO
+        return cls(score, max_sev, c, h, m, low_count, len(findings))
 
 
 @dataclass
@@ -163,6 +182,9 @@ class ScanResult:
     findings: List[Finding] = field(default_factory=list)
     risk_score: Optional[RiskScore] = None
     summary: Optional[str] = None
+    blocked: bool = False
+    analyzer_errors: int = 0
+    skipped_cache: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -173,6 +195,9 @@ class ScanResult:
             "files_scanned": self.files_scanned,
             "risk_score": self.risk_score.to_dict() if self.risk_score else None,
             "summary": self.summary,
+            "blocked": self.blocked,
+            "analyzer_errors": self.analyzer_errors,
+            "skipped_cache": self.skipped_cache,
             "findings": [f.to_dict() for f in sorted(
                 self.findings,
                 key=lambda x: (SEVERITY_ORDER.get(x.severity, 99), x.file_path or "", x.line_number or 0),
@@ -180,7 +205,3 @@ class ScanResult:
         }
 
 
-def _trunc(s: Optional[str], n: int) -> Optional[str]:
-    if s is None:
-        return None
-    return s[:n] + "..." if len(s) > n else s

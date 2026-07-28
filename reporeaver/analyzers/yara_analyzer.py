@@ -4,11 +4,12 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 log = logging.getLogger("reporeaver.yara")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 # Minimal built-in YARA-like rules (regex-based, no yara-python dependency)
@@ -47,7 +48,7 @@ BUILTIN_RULES = [
     {
         "rule": "reporeaver_sql_injection",
         "description": "SQL injection pattern in code",
-        "pattern": r'(?i)(?:SELECT\s+.*\s+FROM\s+.*\s+WHERE\s+.*=\s*["\']\s*["\']?\s*\+|UNION\s+SELECT\s+--\s|exec\s*\(\s*["\']SELECT)',
+        "pattern": r'(?i)(?:SELECT\s+\S+\s+FROM\s+\S+\s+WHERE\s+\S+\s*=\s*["\']\s*["\']?\s*\+|UNION\s+SELECT\s+--\s|exec\s*\(\s*["\']SELECT)',
         "severity": Severity.HIGH,
     },
     {
@@ -77,8 +78,8 @@ BUILTIN_RULES = [
 ]
 
 YARA_RULE_DIRS = [
-    os.path.expanduser("~/.reporeaver/yara"),
     "/etc/reporeaver/yara",
+    os.path.expanduser("~/.reporeaver/yara"),
 ]
 
 
@@ -90,6 +91,16 @@ class YaraAnalyzer(BaseAnalyzer):
 
     def __init__(self, config: Optional[Dict] = None):
         super().__init__(config)
+        self._yara_compiled = None
+        self._init_yara()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_yara_compiled"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
         self._yara_compiled = None
         self._init_yara()
 
@@ -146,6 +157,10 @@ class YaraAnalyzer(BaseAnalyzer):
 
         for rule in BUILTIN_RULES:
             try:
+                # Pre-check for expensive patterns: skip if no line has long alpha runs
+                if rule.get("rule") == "reporeaver_base64_payload":
+                    if not any(len(line.strip()) >= 100 for line in content.splitlines() if line.strip()):
+                        continue
                 for match in re.finditer(rule["pattern"], content):
                     condition = rule.get("condition")
                     if condition and not condition(match.group(0)):
@@ -158,7 +173,7 @@ class YaraAnalyzer(BaseAnalyzer):
                         attack_path="Built-in detection pattern triggered -> potential malware",
                         remediation="Review matched content manually.",
                         line_number=line_no,
-                        snippet=_trunc(content[max(0, match.start()-20):match.end()+40], 150),
+                        snippet=trunc(content[max(0, match.start()-20):match.end()+40], 150),
                     ))
             except re.error as exc:
                 log.debug("regex error in rule %s: %s", rule.get("rule"), exc)
@@ -166,5 +181,4 @@ class YaraAnalyzer(BaseAnalyzer):
         return AnalyzerResult(findings)
 
 
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s
+

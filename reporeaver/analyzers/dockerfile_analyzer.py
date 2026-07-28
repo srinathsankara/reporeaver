@@ -4,6 +4,7 @@ import re
 from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 DANGEROUS_INSTRUCTIONS = [
@@ -82,10 +83,10 @@ class DockerfileAnalyzer(BaseAnalyzer):
                     findings.append(Finding(
                         path, severity, Confidence.HIGH, Category.SUSPICIOUS_COMMAND,
                         title=f"Dockerfile: {desc}",
-                        description=f"Line {line_no}: {_trunc(stripped, 200)}",
+                        description=f"Line {line_no}: {trunc(stripped, 200)}",
                         attack_path="docker build -> layer executes -> potentially dangerous instruction",
                         remediation="Review and replace with safer alternatives.",
-                        line_number=line_no, snippet=_trunc(stripped, 150),
+                        line_number=line_no, snippet=trunc(stripped, 150),
                     ))
 
         if not has_user:
@@ -108,5 +109,5 @@ class DockerfileAnalyzer(BaseAnalyzer):
         return AnalyzerResult(findings)
 
 
-def _trunc(s: str, n: int) -> str:
+def trunc(s: str, n: int) -> str:
     return s[:n] + "..." if len(s) > n else s

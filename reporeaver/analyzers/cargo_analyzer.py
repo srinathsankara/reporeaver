@@ -9,6 +9,7 @@ from typing import List
 log = logging.getLogger("reporeaver.cargo")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc, line_of
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 
@@ -43,11 +44,11 @@ def _check_cargo_toml(content: str, path: str) -> AnalyzerResult:
         url = match.group(1)
         findings.append(Finding(
             path, Severity.MEDIUM, Confidence.LOW, Category.SUSPICIOUS_DEPENDENCY,
-            title=f"Cargo dependency from git: {_trunc(url, 80)}",
+            title=f"Cargo dependency from git: {trunc(url, 80)}",
             description=f"Cargo.toml references git repository '{url}' — unpinned dependency.",
             attack_path="cargo build -> fetches from git -> mutable reference -> supply-chain risk",
             remediation="Pin to a specific commit SHA or use crates.io version.",
-            line_number=_line_of(content, match.start()), raw_value=url,
+            line_number=line_of(content, match.start()), raw_value=url,
         ))
 
     # Check for build scripts
@@ -68,7 +69,7 @@ def _check_cargo_toml(content: str, path: str) -> AnalyzerResult:
             description="Procedural macros execute arbitrary code at compile time.",
             attack_path="cargo build -> proc-macro code executes -> compile-time compromise",
             remediation="Audit the proc-macro crate thoroughly.",
-            line_number=_line_of(content, match.start()),
+            line_number=line_of(content, match.start()),
         ))
 
     return AnalyzerResult(findings)
@@ -101,19 +102,14 @@ def _check_build_rs(content: str, path: str) -> AnalyzerResult:
             findings.append(Finding(
                 path, severity, Confidence.MEDIUM, Category.SUSPICIOUS_COMMAND,
                 title=desc,
-                description=f"build.rs uses '{_trunc(match.group(0), 80)}' — this runs during cargo build.",
+                description=f"build.rs uses '{trunc(match.group(0), 80)}' — this runs during cargo build.",
                 attack_path="cargo build -> build.rs executes -> system access",
                 remediation="Review build.rs. Remove unnecessary operations.",
-                line_number=_line_of(content, match.start()),
-                snippet=_trunc(content[max(0, match.start()-20):match.end()+40], 150),
+                line_number=line_of(content, match.start()),
+                snippet=trunc(content[max(0, match.start()-20):match.end()+40], 150),
             ))
 
     return AnalyzerResult(findings)
 
 
-def _line_of(content: str, pos: int) -> int:
-    return content[:pos].count("\n") + 1
 
-
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s

@@ -46,6 +46,15 @@ class Policy:
         return finding.category.value in self.block_categories
 
 
+def evaluate_policy(policy_path: Optional[str], findings: List[Finding]) -> bool:
+    """Evaluate findings against a policy file. Returns True if scan should be blocked."""
+    if not policy_path:
+        return False
+    policy = load_policy(policy_path)
+    policy_findings = policy.evaluate(findings)
+    return len(policy_findings) > 0
+
+
 def _severity_value(s: str) -> int:
     order = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
     return order.get(s.lower(), 2)
@@ -53,10 +62,22 @@ def _severity_value(s: str) -> int:
 
 def load_policy(path: str) -> Policy:
     import yaml
-    with open(path) as f:
+    with open(path, encoding="utf-8", errors="replace") as f:
         data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Policy file {path} must contain a mapping, got {type(data).__name__}")
+    valid_thresholds = {"info", "low", "medium", "high", "critical"}
+    threshold = data.get("severity_threshold", "high")
+    if threshold not in valid_thresholds:
+        raise ValueError(f"severity_threshold must be one of {valid_thresholds}, got {threshold!r}")
+    categories = data.get("block_categories", [])
+    if not isinstance(categories, list):
+        raise ValueError(f"block_categories must be a list, got {type(categories).__name__}")
+    paths = data.get("allow_paths", [])
+    if not isinstance(paths, list):
+        raise ValueError(f"allow_paths must be a list, got {type(paths).__name__}")
     return Policy(
-        severity_threshold=data.get("severity_threshold", "high"),
-        block_categories=data.get("block_categories", []),
-        allow_paths=data.get("allow_paths", []),
+        severity_threshold=threshold,
+        block_categories=categories,
+        allow_paths=paths,
     )

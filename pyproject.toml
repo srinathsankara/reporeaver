@@ -39,13 +39,42 @@ Repository = "https://github.com/srinathsankara/reporeaver"
 [project.scripts]
 reporeaver = "reporeaver.cli:main"
 
+[project.entry-points."reporeaver.analyzers"]
+svg_analyzer = "reporeaver.analyzers.svg_analyzer:SVGVectorAnalyzer"
+unicode_analyzer = "reporeaver.analyzers.unicode_analyzer:UnicodeAnalyzer"
+script_analyzer = "reporeaver.analyzers.script_analyzer:ScriptAnalyzer"
+dep_analyzer = "reporeaver.analyzers.dep_analyzer:DepAnalyzer"
+workflow_analyzer = "reporeaver.analyzers.workflow_analyzer:WorkflowAnalyzer"
+entropy_analyzer = "reporeaver.analyzers.entropy_analyzer:EntropyAnalyzer"
+url_analyzer = "reporeaver.analyzers.url_analyzer:URLNetworkAnalyzer"
+mime_analyzer = "reporeaver.analyzers.mime_analyzer:MimeDeceptionAnalyzer"
+behavioral_analyzer = "reporeaver.analyzers.behavioral_analyzer:BehavioralAnalyzer"
+secrets_analyzer = "reporeaver.analyzers.secrets_analyzer:SecretsAnalyzer"
+cargo_analyzer = "reporeaver.analyzers.cargo_analyzer:CargoAnalyzer"
+python_analyzer = "reporeaver.analyzers.python_analyzer:PythonAnalyzer"
+dockerfile_analyzer = "reporeaver.analyzers.dockerfile_analyzer:DockerfileAnalyzer"
+wasm_analyzer = "reporeaver.analyzers.wasm_analyzer:WasmAnalyzer"
+yara_analyzer = "reporeaver.analyzers.yara_analyzer:YaraAnalyzer"
+
 [project.optional-dependencies]
 dashboard = ["fastapi>=0.100", "uvicorn>=0.20", "jinja2>=3.0"]
 all = ["fastapi>=0.100", "uvicorn>=0.20", "jinja2>=3.0"]
-dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.6.0", "mypy>=1.11", "pre-commit>=3.0"]
 
 [tool.setuptools.packages.find]
 include = ["reporeaver*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.8"
+strict = false
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

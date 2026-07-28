@@ -5,7 +5,9 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .config import RepoReaverConfig
 from .engine import scan_target
+from .logging import setup_logging
 
 
 def build_parser():
@@ -68,26 +70,40 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    setup_logging(verbose=getattr(args, 'verbose', False))
+
     if args.command == "scan":
-        if not Path(args.path).exists():
+        path = Path(args.path)
+        if not path.exists():
             print(f"Can't find: {args.path}", file=sys.stderr)
             sys.exit(1)
 
         skip_list = args.skip.split(",") if args.skip else None
+        cache_dir = Path.home() / ".reporeaver" / "cache" if not args.no_cache else None
+        config = RepoReaverConfig(
+            cache_dir=cache_dir,
+            diff_only=args.diff_mode,
+            workers=args.workers,
+            max_size_mb=args.max_size,
+            policy=args.policy,
+            skip_analyzers=skip_list,
+            no_cache=args.no_cache,
+        )
+        save_history = not args.no_history
+        if save_history:
+            try:
+                path.resolve().relative_to(Path.home())
+            except ValueError:
+                save_history = False
         exit_code = scan_target(
-            target=args.path,
+            target_path=path,
+            config=config,
             verbose=args.verbose,
             json_output=args.json_output,
             sarif_output=args.sarif_output,
             html_output=args.html_output,
             output_file=args.output,
-            policy_path=args.policy,
-            max_size_mb=args.max_size,
-            skip_analyzers=skip_list,
-            max_workers=args.workers,
-            save_history=not args.no_history,
-            diff_mode=args.diff_mode,
-            no_cache=args.no_cache,
+            save_history=save_history,
         )
         sys.exit(exit_code)
 

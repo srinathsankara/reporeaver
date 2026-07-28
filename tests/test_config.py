@@ -1,24 +1,21 @@
-"""Tests for config file auto-discovery."""
+"""Tests for scan configuration."""
 
-from reporeaver.config import discover_config, merge_config
-
-
-def test_discover_config_none(tmp_path):
-    cfg = discover_config(str(tmp_path))
-    assert cfg == {}
+from reporeaver.config import RepoReaverConfig
+from pathlib import Path
 
 
-def test_merge_config_cli_overrides():
-    cli = {"verbose": True, "max_size_mb": 5.0}
-    file_cfg = {"verbose": False, "policy": "my-policy.yaml"}
-    merged = merge_config(cli, file_cfg)
-    assert merged["verbose"] is True  # CLI wins
-    assert merged["max_size_mb"] == 5.0
-    assert merged["policy"] == "my-policy.yaml"  # from file
+def test_default_config():
+    cfg = RepoReaverConfig()
+    assert cfg.workers == 4
+    assert cfg.max_size_mb == 2.0
+    assert cfg.diff_only is False
 
 
-def test_merge_config_empty_cli():
-    cli = {"verbose": None}
-    file_cfg = {"verbose": True}
-    merged = merge_config(cli, file_cfg)
-    assert merged["verbose"] is True  # file_cfg used when cli is None
+def test_config_with_cache_dir():
+    cfg = RepoReaverConfig(cache_dir=Path("/tmp/cache"))
+    assert cfg.cache_dir == Path("/tmp/cache")
+
+
+def test_config_no_history():
+    cfg = RepoReaverConfig(no_cache=True)
+    assert cfg.no_cache is True

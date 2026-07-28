@@ -7,6 +7,7 @@ import re
 from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 # Each behavior group has a list of (regex_pattern, severity) tuples.
@@ -26,12 +27,12 @@ BEHAVIOR_PATTERNS = {
     },
     "execution_behavior": {
         "patterns": [
-            (r"(?:eval|exec)\s*\([\"'].*[\"']\s*\)", Severity.CRITICAL),
+            (r"(?:eval|exec)\s*\([\"'][^\"']*[\"']\s*\)", Severity.CRITICAL),
             (r"(?:child_process|execSync|spawn|spawnSync|execFile|fork)", Severity.CRITICAL),
             (r"(?:os\.system|subprocess\.(?:call|Popen|run)|popen)", Severity.CRITICAL),
             (r"(?:Runtime\.getRuntime\(\)\.exec|ProcessBuilder)", Severity.CRITICAL),
-            (r"Function\s*\([\"'].*[\"']\)", Severity.CRITICAL),
-            (r"setTimeout\s*\([\"'].*[\"']", Severity.MEDIUM),
+            (r"Function\s*\([\"'][^\"']*[\"']\)", Severity.CRITICAL),
+            (r"setTimeout\s*\([\"'][^\"']*[\"']", Severity.MEDIUM),
             (r"node\s+(?:-e|--eval)\s+[\"']", Severity.HIGH),
             (r"python\s+-c\s+[\"']", Severity.HIGH),
         ],
@@ -98,5 +99,4 @@ def check_behavior(content: str, path: str, findings: List[Finding],
             ))
 
 
-def trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s
+

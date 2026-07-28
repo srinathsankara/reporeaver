@@ -29,6 +29,8 @@ IGNORE_EXTS = {
 }
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per-file limit
+TOTAL_MAX_SIZE = 500 * 1024 * 1024  # 500MB total decompressed limit
+MAX_FILE_COUNT = 10_000  # prevent zip bomb metadata exhaustion
 ARCHIVE_EXTS = {".zip", ".tar", ".gz", ".tgz", ".rar", ".7z"}
 
 
@@ -47,7 +49,10 @@ class DirectoryIngester(BaseIngester):
         for p in sorted(root.rglob("*")):
             if not p.is_file():
                 continue
-            rel = str(p.relative_to(root)).replace("\\", "/")
+            try:
+                rel = str(p.relative_to(root)).replace("\\", "/")
+            except ValueError:
+                continue
             if any(seg in IGNORE_DIRS for seg in rel.split("/")):
                 continue
             if p.suffix.lower() in IGNORE_EXTS:
@@ -75,6 +80,27 @@ class ArchiveIngester(BaseIngester):
         return IngestResult(source_type="archive", source_path=source)
 
 
+def _should_skip_name(name: str) -> bool:
+    if ".." in Path(name).parts or name.startswith("/") or ":" in name:
+        log.debug("Skipping path traversal entry: %s", name)
+        return True
+    if any(seg in IGNORE_DIRS for seg in name.split("/")):
+        return True
+    if Path(name).suffix.lower() in IGNORE_EXTS:
+        return True
+    return False
+
+
+def _is_bomb(files: list, total_size: int, name: str) -> bool:
+    if len(files) >= MAX_FILE_COUNT:
+        log.warning("Archive bomb: too many files")
+        return True
+    if total_size > TOTAL_MAX_SIZE:
+        log.warning("Archive bomb: total size exceeds limit near %s", name)
+        return True
+    return False
+
+
 def _extract_archive_path(path: Path, depth: int = 0) -> IngestResult:
     """Extract an archive, recursively handling nested archives."""
     if depth > 3:
@@ -89,23 +115,37 @@ def _extract_archive_path(path: Path, depth: int = 0) -> IngestResult:
 
 def _ingest_zip(path: Path, depth: int = 0) -> IngestResult:
     files: List[FileEntry] = []
+    total_size = 0
     try:
         with zipfile.ZipFile(str(path)) as z:
             for info in z.infolist():
                 if info.is_dir():
                     continue
                 name = info.filename
-                if any(seg in IGNORE_DIRS for seg in name.split("/")):
-                    continue
-                ext = Path(name).suffix.lower()
-                if ext in IGNORE_EXTS:
+                if _should_skip_name(name):
                     continue
                 if info.file_size > MAX_FILE_SIZE:
                     continue
-                # Check for nested archive
+                total_size += info.file_size
+                if _is_bomb(files, total_size, path.name):
+                    break
+                ext = Path(name).suffix.lower()
+                # Check for nested archive (stream with decompression cap)
                 if ext in ARCHIVE_EXTS and depth < 3:
                     try:
-                        raw = z.read(name)
+                        with z.open(name) as zf:
+                            total_read = 0
+                            chunks = []
+                            while True:
+                                chunk = zf.read(65536)
+                                if not chunk:
+                                    break
+                                total_read += len(chunk)
+                                if total_read > TOTAL_MAX_SIZE:
+                                    log.warning("Nested archive decompression exceeded limit for %s", name)
+                                    raise MemoryError("decompression bomb")
+                                chunks.append(chunk)
+                        raw = b"".join(chunks)
                         nested = _extract_archive_bytes(raw, name, depth + 1)
                         files.extend(nested.files)
                         continue
@@ -115,6 +155,8 @@ def _ingest_zip(path: Path, depth: int = 0) -> IngestResult:
                 entry = _build_entry(name, info.file_size, mime, ext)
                 if entry:
                     files.append(entry)
+    except MemoryError:
+        raise
     except Exception as exc:
         log.debug("Zip ingest failed for %s: %s", path, exc)
     return IngestResult(files=files, source_type="zip", source_path=str(path))
@@ -122,6 +164,7 @@ def _ingest_zip(path: Path, depth: int = 0) -> IngestResult:
 
 def _ingest_tar(path: Path, depth: int = 0) -> IngestResult:
     files: List[FileEntry] = []
+    total_size = 0
     try:
         mode = "r:gz" if path.suffix in (".gz", ".tgz") else "r"
         with tarfile.open(str(path), mode) as tar:
@@ -129,18 +172,33 @@ def _ingest_tar(path: Path, depth: int = 0) -> IngestResult:
                 if not member.isfile():
                     continue
                 name = member.name
-                if any(seg in IGNORE_DIRS for seg in name.split("/")):
-                    continue
-                ext = Path(name).suffix.lower()
-                if ext in IGNORE_EXTS:
+                if _should_skip_name(name):
                     continue
                 if member.size > MAX_FILE_SIZE:
                     continue
-                # Check for nested archive
+                total_size += member.size
+                if _is_bomb(files, total_size, path.name):
+                    break
+                ext = Path(name).suffix.lower()
+                # Check for nested archive (stream with decompression cap)
                 if ext in ARCHIVE_EXTS and depth < 3:
                     try:
                         f = tar.extractfile(member)
-                        raw = f.read() if f else b""
+                        if f:
+                            total_read = 0
+                            chunks = []
+                            while True:
+                                chunk = f.read(65536)
+                                if not chunk:
+                                    break
+                                total_read += len(chunk)
+                                if total_read > TOTAL_MAX_SIZE:
+                                    log.warning("Nested archive decompression exceeded limit for %s", name)
+                                    raise MemoryError("decompression bomb")
+                                chunks.append(chunk)
+                            raw = b"".join(chunks)
+                        else:
+                            raw = b""
                         nested = _extract_archive_bytes(raw, name, depth + 1)
                         files.extend(nested.files)
                         continue
@@ -150,6 +208,8 @@ def _ingest_tar(path: Path, depth: int = 0) -> IngestResult:
                 entry = _build_entry(name, member.size, mime, ext)
                 if entry:
                     files.append(entry)
+    except MemoryError:
+        raise
     except Exception as exc:
         log.debug("Tar ingest failed for %s: %s", path, exc)
     return IngestResult(files=files, source_type="tar", source_path=str(path))
@@ -160,7 +220,7 @@ def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
     if depth >= 3:
         return IngestResult(source_type="nested_too_deep")
     # Try nested ZIP
-    if data[:2] == b"PK":
+    if len(data) > 2 and zipfile.is_zipfile(io.BytesIO(data)):
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as z:
                 files = []
@@ -207,6 +267,9 @@ def _extract_archive_bytes(data: bytes, name: str, depth: int) -> IngestResult:
 
 def _make_entry(path: Path, rel: Optional[str] = None) -> Optional[FileEntry]:
     try:
+        if path.is_symlink():
+            log.debug("Skipping symlink: %s", path)
+            return None
         fpath = rel or str(path).replace("\\", "/")
         size = path.stat().st_size
         mime = guess_mime(fpath)
@@ -219,6 +282,7 @@ def _make_entry(path: Path, rel: Optional[str] = None) -> Optional[FileEntry]:
 def _build_entry(fpath: str, size: int, mime: str, ext: str,
                  disk_path: Optional[Path] = None) -> Optional[FileEntry]:
     """Build a FileEntry with optional SHA-256 hash."""
+    fpath = fpath.replace("\\", "/")
     hash_val = None
     if disk_path and size < MAX_FILE_SIZE and size > 0:
         try:

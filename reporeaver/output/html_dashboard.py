@@ -1,5 +1,6 @@
 """Generate self-contained HTML dashboard from scan results."""
 
+import html
 import json
 from typing import Dict, List
 
@@ -103,57 +104,58 @@ def render_html(result: ScanResult, output_path: str):
     data = result.to_dict()
     risk = data.get("risk_score", {}) or {}
 
-    html = f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RepoReaver Report — {result.target}</title>
+<title>RepoReaver Report — {html.escape(result.target)}</title>
 <style>{DASHBOARD_CSS}</style>
 </head>
 <body>
 <header>
   <h1>RepoReaver Security Gate Report</h1>
   <p style="color:#8b949e;margin-top:6px">
-    Target: {result.target} &middot; {result.files_scanned} files scanned &middot; {result.scan_time}
+    Target: {html.escape(result.target)} &middot; {html.escape(str(result.files_scanned))} files scanned &middot; {html.escape(str(result.scan_time))}
   </p>
 </header>
 
 <div class="score-card">
   <div class="score critical">
     <div class="label">Risk Score</div>
-    <div class="value">{risk.get("score", 0)}/10</div>
+    <div class="value">{html.escape(str(risk.get("score", 0)))}/10</div>
   </div>
   <div class="score critical">
     <div class="label">Critical</div>
-    <div class="value">{risk.get("critical", 0)}</div>
+    <div class="value">{html.escape(str(risk.get("critical", 0)))}</div>
   </div>
   <div class="score high">
     <div class="label">High</div>
-    <div class="value">{risk.get("high", 0)}</div>
+    <div class="value">{html.escape(str(risk.get("high", 0)))}</div>
   </div>
   <div class="score medium">
     <div class="label">Medium</div>
-    <div class="value">{risk.get("medium", 0)}</div>
+    <div class="value">{html.escape(str(risk.get("medium", 0)))}</div>
   </div>
   <div class="score low">
     <div class="label">Low</div>
-    <div class="value">{risk.get("low", 0)}</div>
+    <div class="value">{html.escape(str(risk.get("low", 0)))}</div>
   </div>
 </div>
 
 <div class="severity-filters">
-  <button class="filter-btn active" data-severity="all" onclick="setFilter(null)">All ({risk.get("total", 0)})</button>
-  <button class="filter-btn" data-severity="critical" onclick="setFilter('critical')">Critical ({risk.get("critical", 0)})</button>
-  <button class="filter-btn" data-severity="high" onclick="setFilter('high')">High ({risk.get("high", 0)})</button>
-  <button class="filter-btn" data-severity="medium" onclick="setFilter('medium')">Medium ({risk.get("medium", 0)})</button>
-  <button class="filter-btn" data-severity="low" onclick="setFilter('low')">Low ({risk.get("low", 0)})</button>
+  <button class="filter-btn active" data-severity="all" onclick="setFilter(null)">All ({html.escape(str(risk.get("total", 0)))})</button>
+  <button class="filter-btn" data-severity="critical" onclick="setFilter('critical')">Critical ({html.escape(str(risk.get("critical", 0)))})</button>
+  <button class="filter-btn" data-severity="high" onclick="setFilter('high')">High ({html.escape(str(risk.get("high", 0)))})</button>
+  <button class="filter-btn" data-severity="medium" onclick="setFilter('medium')">Medium ({html.escape(str(risk.get("medium", 0)))})</button>
+  <button class="filter-btn" data-severity="low" onclick="setFilter('low')">Low ({html.escape(str(risk.get("low", 0)))})</button>
 </div>
 
 <div id="findings"></div>
 
+<script id="scan-data" type="application/json">{json.dumps(data.get("findings", []), ensure_ascii=True, default=str)}</script>
 <script>
-findings = {json.dumps(data.get("findings", []))};
+findings = JSON.parse(document.getElementById('scan-data').textContent);
 render();
 {DASHBOARD_JS}
 </script>
@@ -161,4 +163,4 @@ render();
 </html>"""
 
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write(html)
+        f.write(html_content)

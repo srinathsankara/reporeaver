@@ -6,6 +6,7 @@ from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Set, Tuple
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 # Commonly typosquatted packages — attackers register names one char off
@@ -30,6 +31,11 @@ SUSPICIOUS_PKG_NAMES = [
     "electron-native-", "node-native-", "*-malware", "payload-",
     "crypto-", "crypt-", "decrypt-", "decoding-",
 ]
+
+_suspicious_hook_patterns = re.compile(
+    r"(?:curl|wget|fetch|https?://|download|chmod|chown|/dev/tcp|eval|exec|base64|python|node)",
+    re.IGNORECASE,
+)
 
 SUSPICIOUS_VERSION_PATTERNS = [
     (r'https?://[^\s"\']+', Severity.CRITICAL, "URL-resolved package version"),
@@ -112,13 +118,16 @@ class DepAnalyzer(BaseAnalyzer):
         if isinstance(scripts, dict):
             for hook in ("postinstall", "preinstall", "install"):
                 if hook in scripts:
+                    val = scripts[hook]
+                    if not _suspicious_hook_patterns.search(val):
+                        continue
                     findings.append(Finding(
-                        path, Severity.INFO, Confidence.HIGH, Category.POSTINSTALL_CHAIN,
-                        title=f"Package has '{hook}' script",
-                        description=f"This script runs during install. Review: {_trunc(scripts[hook], 200)}",
-                        attack_path=f"npm install -> {hook} -> {_trunc(scripts[hook], 100)}",
+                        path, Severity.HIGH, Confidence.HIGH, Category.POSTINSTALL_CHAIN,
+                        title=f"Package has '{hook}' script with suspicious operations",
+                        description=f"This script runs during install: {trunc(val, 200)}",
+                        attack_path=f"npm install -> {hook} -> {trunc(val, 100)}",
                         remediation="Audit lifecycle scripts. Use `--ignore-scripts` for inspection.",
-                        snippet=scripts[hook],
+                        snippet=val,
                     ))
 
     def _check_name_squatting(self, name: str, version: str, path: str, findings: List[Finding]):
@@ -202,7 +211,7 @@ class DepAnalyzer(BaseAnalyzer):
                 name = pkg_path.split("node_modules/")[-1] if "node_modules/" in pkg_path else pkg_path
                 findings.append(Finding(
                     path, Severity.CRITICAL, Confidence.HIGH, Category.URL_DEPENDENCY,
-                    title=f"Lockfile resolved URL outside registry: {_trunc(resolved, 100)}",
+                    title=f"Lockfile resolved URL outside registry: {trunc(resolved, 100)}",
                     description=f"Package '{name}' resolves to '{resolved}' — not the official npm registry.",
                     attack_path="npm ci -> fetches from attacker-controlled URL -> arbitrary code",
                     remediation="Run `npm audit` and verify integrity hashes. Reset lockfile if suspicious.",
@@ -213,7 +222,7 @@ class DepAnalyzer(BaseAnalyzer):
             if integrity and not integrity.startswith("sha"):
                 findings.append(Finding(
                     path, Severity.HIGH, Confidence.HIGH, Category.SUSPICIOUS_DEPENDENCY,
-                    title=f"Suspicious integrity hash: {_trunc(integrity, 60)}",
+                    title=f"Suspicious integrity hash: {trunc(integrity, 60)}",
                     description=f"Package '{pkg_path}' has non-standard integrity hash: {integrity}",
                     attack_path="npm ci -> integrity check bypassed -> malicious package installed",
                     remediation="Regenerate lockfile. This indicates lockfile tampering.",
@@ -228,7 +237,7 @@ class DepAnalyzer(BaseAnalyzer):
                 if not any(reg in url for reg in ALLOWED_REGISTRIES):
                     findings.append(Finding(
                         path, Severity.CRITICAL, Confidence.HIGH, Category.URL_DEPENDENCY,
-                        title=f"Yarn lockfile resolves to external URL: {_trunc(url, 100)}",
+                        title=f"Yarn lockfile resolves to external URL: {trunc(url, 100)}",
                         description=f"Package resolved to non-registry URL: {url}",
                         attack_path="yarn install -> fetches from external URL -> malicious package",
                         remediation="Verify the URL and reset lockfile if needed.",
@@ -245,7 +254,7 @@ class DepAnalyzer(BaseAnalyzer):
             if "@" in stripped and "://" in stripped:
                 findings.append(Finding(
                     path, Severity.HIGH, Confidence.MEDIUM, Category.URL_DEPENDENCY,
-                    title=f"Python dependency from URL: {_trunc(stripped, 100)}",
+                    title=f"Python dependency from URL: {trunc(stripped, 100)}",
                     description="URL-based pip dependencies bypass PyPI security guarantees.",
                     attack_path="pip install -> URL dependency -> arbitrary code",
                     remediation="Use PyPI versions with hash verification.",
@@ -256,7 +265,7 @@ class DepAnalyzer(BaseAnalyzer):
                 findings.append(Finding(
                     path, Severity.MEDIUM, Confidence.MEDIUM, Category.SUSPICIOUS_DEPENDENCY,
                     title="Editable pip install — can execute arbitrary setup.py",
-                    description=f"Editable install: {_trunc(stripped, 100)}",
+                    description=f"Editable install: {trunc(stripped, 100)}",
                     attack_path="pip install -e -> setup.py executes during install -> compromise",
                     remediation="Avoid editable installs in production. Pin exact versions.",
                     line_number=line_no, snippet=stripped,
@@ -269,7 +278,7 @@ class DepAnalyzer(BaseAnalyzer):
             if "git:" in line or "github:" in line or "path:" in line:
                 findings.append(Finding(
                     path, Severity.MEDIUM, Confidence.LOW, Category.SUSPICIOUS_DEPENDENCY,
-                    title=f"Ruby gem from non-standard source: {_trunc(line.strip(), 100)}",
+                    title=f"Ruby gem from non-standard source: {trunc(line.strip(), 100)}",
                     description="Non-registry gem sources can introduce untrusted code.",
                     attack_path="bundle install -> gem from external source -> potential compromise",
                     remediation="Use rubygems.org sources with lockfiles.",
@@ -277,5 +286,3 @@ class DepAnalyzer(BaseAnalyzer):
                 ))
 
 
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s

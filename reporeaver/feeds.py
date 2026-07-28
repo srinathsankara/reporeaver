@@ -5,6 +5,7 @@ All network calls are opt-in (user must configure).
 """
 
 import json
+import logging
 import sqlite3
 import time
 import urllib.parse
@@ -12,6 +13,8 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+log = logging.getLogger("reporeaver.feeds")
 
 FEED_DIR = Path.home() / ".reporeaver" / "feeds"
 FEED_DB = FEED_DIR / "feeds.db"
@@ -120,7 +123,7 @@ def query_malwarebazaar(hash_sha256: str) -> Optional[Dict]:
         # Not found — cache empty result
         _set_cache(cache_key, {})
         return None
-    except (urllib.request.URLError, json.JSONDecodeError):
+    except (urllib.error.URLError, json.JSONDecodeError):
         return None
 
 
@@ -143,12 +146,9 @@ def get_known_c2_domains() -> List[str]:
                 domains.append(ip)
         _set_cache(cache_key, domains)
         return domains
-    except (urllib.request.URLError, OSError):
-        # Fallback to hardcoded list
-        return [
-            "pastebin.com", "raw.githubusercontent.com", "ngrok.io",
-            "serveo.net", "localtunnel.me",
-        ]
+    except (urllib.error.URLError, OSError):
+        log.warning("Failed to fetch C2 feed from %s", C2_FEED_URL)
+        return []
 
 
 def check_known_vulnerable(

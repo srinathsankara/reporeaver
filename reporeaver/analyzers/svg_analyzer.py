@@ -3,11 +3,12 @@
 import base64
 import logging
 import re
-from typing import List, Optional
+from typing import Optional
 
 log = logging.getLogger("reporeaver.svg")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc, line_of
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 # Event handlers that can fire automatically when SVG renders
@@ -108,7 +109,7 @@ def check_scripts(content, path, findings):
         body = match.group(1).strip()
         if not body:
             continue
-        line = _line_of(content, match.start())
+        line = line_of(content, match.start())
 
         if is_obfuscated(body):
             findings.append(Finding(
@@ -143,22 +144,27 @@ def check_scripts(content, path, findings):
                     line_number=line, snippet=trunc(body, 300),
                 ))
 
-        # Any URLs in the script body are likely C2 callbacks
-        for url in re.findall(r'https?://[^\s"\'<>)]+', body):
-            findings.append(Finding(
-                path, Severity.HIGH, Confidence.MEDIUM, Category.RUNTIME_NETWORK_CALL,
-                title="SVG script phones home to external URL",
-                description=f"Script contacts {url} — potential C2 or payload download.",
-                attack_path="SVG script -> HTTP request -> attacker server -> payload retrieval",
-                remediation="Remove network calls from SVGs. SVGs don't phone home.",
-                line_number=line, raw_value=url,
-            ))
+        _safe_domains = {"cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com",
+                          "code.jquery.com", "maxcdn.bootstrapcdn.com", "stackpath.bootstrapcdn.com",
+                          "fonts.googleapis.com", "ajax.googleapis.com",
+                          "cdn.skypack.dev", "esm.sh"}
+        for url in re.findall(r'https?://([^\s"\'<>)]+)', body):
+            domain = url.split("/")[0]
+            if domain not in _safe_domains:
+                findings.append(Finding(
+                    path, Severity.HIGH, Confidence.MEDIUM, Category.RUNTIME_NETWORK_CALL,
+                    title="SVG script phones home to external URL",
+                    description=f"Script contacts {url} — potential C2 or payload download.",
+                    attack_path="SVG script -> HTTP request -> attacker server -> payload retrieval",
+                    remediation="Remove network calls from SVGs. SVGs don't phone home.",
+                    line_number=line, raw_value=url,
+                ))
 
 
 def check_event_handlers(content, path, findings):
     for match in EVENT_HANDLER.finditer(content):
         val = match.group(2)
-        line = _line_of(content, match.start())
+        line = line_of(content, match.start())
         decoded = try_base64_decode(val)
 
         findings.append(Finding(
@@ -184,7 +190,7 @@ def check_event_handlers(content, path, findings):
 def check_data_uris(content, path, findings):
     for match in DATA_URI.finditer(content):
         data = match.group(1)
-        line = _line_of(content, match.start())
+        line = line_of(content, match.start())
         decoded = try_base64_decode(data)
         if decoded and any(kw in decoded.lower() for kw in ["script", "eval(", "onload", "javascript:", "fetch("]):
             findings.append(Finding(
@@ -207,7 +213,7 @@ def check_foreign_objects(content, path, findings):
                 description="foreignObject can embed HTML with scripts. Bypasses scanners that only check <svg>.",
                 attack_path="SVG rendered -> foreignObject parsed -> embedded script executes",
                 remediation="Remove <foreignObject> or sanitize its contents.",
-                line_number=_line_of(content, match.start()),
+        line_number=line_of(content, match.start()),
             ))
 
 
@@ -220,7 +226,7 @@ def check_js_uris(content, path, findings):
             description=f"Link executes: {trunc(js, 200)}",
             attack_path="User clicks -> javascript: URI executes -> XSS / redirect",
             remediation="Remove javascript: URIs from SVGs.",
-            line_number=_line_of(content, match.start()), snippet=js,
+            line_number=line_of(content, match.start()), snippet=js,
         ))
 
 
@@ -253,7 +259,7 @@ def check_external_links(content, path, findings):
             description=f"External resource: {url}",
             attack_path="SVG rendered -> fetches external resource -> tracking / SSRF",
             remediation="Verify external URLs are necessary and trusted.",
-            line_number=_line_of(content, match.start()), raw_value=url,
+            line_number=line_of(content, match.start()), raw_value=url,
         ))
 
 
@@ -265,7 +271,7 @@ def check_css_expressions(content, path, findings):
             description="CSS expressions can execute JS in some renderers (old IE, some parsers).",
             attack_path="SVG rendered -> CSS expression evaluated -> JS execution",
             remediation="Remove CSS expressions from SVG styles.",
-            line_number=_line_of(content, match.start()),
+            line_number=line_of(content, match.start()),
         ))
 
 
@@ -294,9 +300,7 @@ def try_base64_decode(text: str) -> Optional[str]:
     return None
 
 
-def _line_of(content: str, pos: int) -> int:
-    return content[:pos].count("\n") + 1
 
 
-def trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s
+
+

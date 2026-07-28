@@ -1,9 +1,10 @@
 """Unicode Analyzer — detects zero-width characters, homoglyphs, bidi overrides, and other Unicode tricks."""
 
 import re
-from typing import Dict, List, Optional
+from typing import List
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import get_context, trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 ZERO_WIDTH_CHARS = {
@@ -16,10 +17,6 @@ ZERO_WIDTH_CHARS = {
     "\u2062": "U+2062 INVISIBLE TIMES",
     "\u2063": "U+2063 INVISIBLE SEPARATOR",
     "\u2064": "U+2064 INVISIBLE PLUS",
-    "\u2066": "U+2066 LEFT-TO-RIGHT ISOLATE",
-    "\u2067": "U+2067 RIGHT-TO-LEFT ISOLATE",
-    "\u2068": "U+2068 FIRST STRONG ISOLATE",
-    "\u2069": "U+2069 POP DIRECTIONAL ISOLATE",
     "\u202a": "U+202A LEFT-TO-RIGHT EMBEDDING",
     "\u202b": "U+202B RIGHT-TO-LEFT EMBEDDING",
     "\u202c": "U+202C POP DIRECTIONAL FORMATTING",
@@ -76,10 +73,12 @@ class UnicodeAnalyzer(BaseAnalyzer):
         return AnalyzerResult(findings)
 
     def _check_zero_width(self, content: str, path: str, findings: List[Finding]):
+        chars_found = set()
         for line_no, line in enumerate(content.splitlines(), 1):
             for char, name in ZERO_WIDTH_CHARS.items():
-                if char in line:
-                    context = self._get_context(line, char)
+                if char in line and char not in chars_found:
+                    chars_found.add(char)
+                    context = get_context(line, char)
                     findings.append(Finding(
                         path, Severity.MEDIUM, Confidence.HIGH, Category.ZERO_WIDTH_CHAR,
                         title=f"Zero-width/invisible Unicode character: {name}",
@@ -92,10 +91,12 @@ class UnicodeAnalyzer(BaseAnalyzer):
                     ))
 
     def _check_bidi_overrides(self, content: str, path: str, findings: List[Finding]):
+        chars_found = set()
         for line_no, line in enumerate(content.splitlines(), 1):
             for char in BIDI_OVERRIDE_CHARS:
-                if char in line:
-                    context = self._get_context(line, char)
+                if char in line and char not in chars_found:
+                    chars_found.add(char)
+                    context = get_context(line, char)
                     findings.append(Finding(
                         path, Severity.HIGH, Confidence.HIGH, Category.BIDI_OVERRIDE,
                         title="Bidirectional text override character detected (Trojan Source)",
@@ -122,7 +123,7 @@ class UnicodeAnalyzer(BaseAnalyzer):
                                         f"This can hide malicious imports or variable references.",
                             attack_path="Code reviewed as safe -> homoglyph binds to different function -> supply-chain attack",
                             remediation="Replace homoglyph characters with their ASCII equivalents.",
-                            line_number=line_no, snippet=self._get_context(line, disguised),
+                            line_number=line_no, snippet=get_context(line, disguised),
                         ))
 
     def _check_filename(self, entry: FileEntry, findings: List[Finding]):
@@ -151,14 +152,4 @@ class UnicodeAnalyzer(BaseAnalyzer):
                     raw_value=repr(fname),
                 ))
 
-    def _get_context(self, line: str, target: str, radius: int = 40) -> str:
-        idx = line.find(target)
-        if idx == -1:
-            return _trunc(line.strip(), 150)
-        start = max(0, idx - radius)
-        end = min(len(line), idx + radius)
-        return _trunc(line[start:end].strip(), 150)
 
-
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s

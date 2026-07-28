@@ -1,14 +1,15 @@
 """Entropy Analyzer — detects high-entropy/encoded strings that may hide payloads."""
 
 import logging
-import math
 import re
 import string
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 log = logging.getLogger("reporeaver.entropy")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.entropy import shannon
+from ..utils.text import trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 ENTROPY_THRESHOLD = 5.5
@@ -39,7 +40,7 @@ class EntropyAnalyzer(BaseAnalyzer):
             if len(stripped) > MAX_LINE_LENGTH:
                 stripped = stripped[:MAX_LINE_LENGTH]
 
-            entropy = _shannon_entropy(stripped)
+            entropy = shannon(stripped)
             if entropy < ENTROPY_THRESHOLD:
                 continue
 
@@ -59,29 +60,23 @@ class EntropyAnalyzer(BaseAnalyzer):
                                 f"({len(stripped)} chars) that decodes to meaningful content",
                     attack_path="Encoded string decoded -> reveals hidden payload or configuration",
                     remediation="Review this string. If intentional, document it. If suspicious, decode and inspect.",
-                    line_number=line_no, decoded=_trunc(decoded, 300),
-                    raw_value=_trunc(stripped, 80),
+                    line_number=line_no, decoded=trunc(decoded, 300),
+                    raw_value=trunc(stripped, 80),
                 ))
-            elif is_b64 and entropy > 6.0:
+            elif is_b64 and entropy >= 6.0:
                 findings.append(Finding(
                     path, Severity.MEDIUM, Confidence.LOW, Category.HIGH_ENTROPY,
                     title=f"High-entropy string (entropy={entropy:.1f})",
                     description=f"Long high-entropy string ({len(stripped)} chars) — may be obfuscated payload",
                     attack_path="Could contain hidden data — decoded content not recognizable",
                     remediation="Inspect manually. Check if this is an expected token, key, or configuration.",
-                    line_number=line_no, raw_value=_trunc(stripped, 80),
+                    line_number=line_no, raw_value=trunc(stripped, 80),
                 ))
 
         return AnalyzerResult(findings)
 
 
-def _shannon_entropy(data: str) -> float:
-    if not data:
-        return 0.0
-    freq: Dict[str, int] = {}
-    for c in data:
-        freq[c] = freq.get(c, 0) + 1
-    return -sum((c / len(data)) * math.log2(c / len(data)) for c in freq.values())
+
 
 
 def _try_decode(data: str) -> Optional[str]:
@@ -109,5 +104,4 @@ def _has_meaningful_content(text: str) -> bool:
     return (printable / len(text)) > 0.7
 
 
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s
+

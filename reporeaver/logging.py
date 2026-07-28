@@ -4,19 +4,15 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 _LOG_DIR = Path.home() / ".reporeaver"
-_LOG: Optional[logging.Logger] = None
 
 
-def get_logger(name: str = "reporeaver") -> logging.Logger:
-    global _LOG
-    if _LOG is not None:
-        return _LOG
-
+def setup_logging(verbose: bool = False) -> logging.Logger:
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger("reporeaver")
+    if logger.handlers:
+        return logger
     logger.setLevel(logging.DEBUG)
 
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
@@ -28,12 +24,15 @@ def get_logger(name: str = "reporeaver") -> logging.Logger:
     logger.addHandler(fh)
 
     ch = logging.StreamHandler(sys.stdout)
-    if os.environ.get("REPOREAVER_VERBOSE"):
+    if verbose or os.environ.get("REPOREAVER_VERBOSE"):
         ch.setLevel(logging.DEBUG)
     else:
-        ch.setLevel(logging.WARNING)
+        ch.setLevel(logging.INFO)
     ch.setFormatter(fmt)
     logger.addHandler(ch)
 
-    _LOG = logger
     return logger
+
+
+def get_logger(name: str = "reporeaver") -> logging.Logger:
+    return setup_logging()

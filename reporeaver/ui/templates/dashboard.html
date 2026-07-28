@@ -67,6 +67,11 @@ nav .ver{color:#8b949e;font-size:12px}
 let scans = [];
 let filterSev = null;
 
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function showTab(t) {
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.textContent.toLowerCase().includes(t) || (t==='all' && el.textContent==='All Scans')));
   filterSev = t === 'all' ? null : t;
@@ -98,7 +103,7 @@ function renderStats(s) {
     ${s.worst ? `
     <div class="stat-card danger">
       <div class="num">${s.worst.risk_score}</div>
-      <div class="lbl">Worst: ${s.worst.target.split('/').pop()}</div>
+      <div class="lbl">Worst: ${escapeHtml((s.worst.target || '').split('/').pop())}</div>
     </div>` : ''}
   `;
 }
@@ -112,8 +117,8 @@ function renderList() {
   }
   container.innerHTML = filtered.map(s => {
     const sev = s.max_sev || 'info';
-    const target = (s.target || '').split('/').pop() || s.target;
-    const time = s.scan_time ? new Date(s.scan_time).toLocaleString() : '?';
+    const target = escapeHtml((s.target || '').split('/').pop() || s.target);
+    const time = s.scan_time ? escapeHtml(new Date(s.scan_time).toLocaleString()) : '?';
     return `<div class="scan-row" onclick="showDetail(${s.id})">
       <div class="left">
         <span class="sev sev-${sev}">${sev}</span>
@@ -121,9 +126,9 @@ function renderList() {
         <span class="time">${time}</span>
       </div>
       <div style="display:flex;gap:12px;align-items:center;font-size:13px;color:#8b949e">
-        <span>${s.risk_score}/10</span>
-        <span>${s.files_count || 0} files</span>
-        <span>${s.duration_ms ? (s.duration_ms/1000).toFixed(1)+'s' : ''}</span>
+        <span>${escapeHtml(s.risk_score)}/10</span>
+        <span>${escapeHtml(s.files_count || 0)} files</span>
+        <span>${s.duration_ms ? escapeHtml((s.duration_ms/1000).toFixed(1))+'s' : ''}</span>
       </div>
     </div>`;
   }).join('');
@@ -148,26 +153,26 @@ async function showDetail(id) {
   panel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:start">
       <div>
-        <h3>${target}</h3>
-        <p style="color:#8b949e;font-size:13px">${time} &middot; ${s.files_count} files &middot; ${s.duration_ms ? (s.duration_ms/1000).toFixed(1)+'s' : ''}</p>
+        <h3>${escapeHtml(target)}</h3>
+        <p style="color:#8b949e;font-size:13px">${escapeHtml(time)} &middot; ${escapeHtml(s.files_count)} files &middot; ${s.duration_ms ? escapeHtml((s.duration_ms/1000).toFixed(1))+'s' : ''}</p>
       </div>
       <div style="text-align:right">
         <span class="sev sev-${sev}" style="font-size:13px">${sev.toUpperCase()}</span>
-        <div style="font-size:24px;font-weight:700;margin-top:4px;color:${sev==='critical'?'#f85149':sev==='high'?'#d29922':'#58a6ff'}">${s.risk_score}/10</div>
+        <div style="font-size:24px;font-weight:700;margin-top:4px;color:${sev==='critical'?'#f85149':sev==='high'?'#d29922':'#58a6ff'}">${escapeHtml(s.risk_score)}/10</div>
       </div>
     </div>
     <div style="display:flex;gap:16px;margin:12px 0;font-size:13px;color:#8b949e">
-      <span>Critical: ${s.critical || 0}</span>
-      <span>High: ${s.high || 0}</span>
-      <span>Medium: ${s.medium || 0}</span>
-      <span>Low: ${s.low || 0}</span>
+      <span>Critical: ${escapeHtml(s.critical || 0)}</span>
+      <span>High: ${escapeHtml(s.high || 0)}</span>
+      <span>Medium: ${escapeHtml(s.medium || 0)}</span>
+      <span>Low: ${escapeHtml(s.low || 0)}</span>
     </div>
     ${findings.length ? findings.map(f => `
       <div class="finding">
-        <div class="title"><span class="sev sev-${f.severity||'info'}" style="margin-right:8px">${f.severity||'?'}</span>${f.title||'?'}</div>
-        <div class="meta">${f.file||'?'}${f.line ? ', line '+f.line : ''}</div>
-        ${f.description ? `<div class="desc">${f.description}</div>` : ''}
-        ${f.attack_path ? `<div class="desc" style="color:#d29922">Chain: ${f.attack_path}</div>` : ''}
+        <div class="title"><span class="sev sev-${escapeHtml(f.severity||'info')}" style="margin-right:8px">${escapeHtml(f.severity||'?')}</span>${escapeHtml(f.title||'?')}</div>
+        <div class="meta">${escapeHtml(f.file||'?')}${f.line ? ', line '+escapeHtml(f.line) : ''}</div>
+        ${f.description ? '<div class="desc">'+escapeHtml(f.description)+'</div>' : ''}
+        ${f.attack_path ? '<div class="desc" style="color:#d29922">Chain: '+escapeHtml(f.attack_path)+'</div>' : ''}
       </div>
     `).join('') : '<p style="color:#8b949e">No findings</p>'}
     <div style="margin-top:12px;display:flex;gap:8px">

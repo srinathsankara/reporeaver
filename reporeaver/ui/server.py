@@ -10,17 +10,10 @@ from typing import Optional
 HERE = Path(__file__).parent
 
 
-def serve(host: str = "127.0.0.1", port: int = 9520,
-          open_browser: bool = True, auth_token: Optional[str] = None):
-    """Spin up the dashboard. Optional auth via ?token= or Authorization header."""
-    try:
-        from fastapi import FastAPI, HTTPException, Query, Request
-        from fastapi.responses import HTMLResponse
-        import uvicorn
-    except ImportError:
-        print("Dashboard requires: pip install reporeaver[dashboard]", file=sys.stderr)
-        print("  or: pip install fastapi uvicorn jinja2", file=sys.stderr)
-        sys.exit(1)
+def _build_app(auth_token: Optional[str] = None):
+    """Build and return the FastAPI app (no server, for testing)."""
+    from fastapi import FastAPI, HTTPException, Query, Request
+    from fastapi.responses import HTMLResponse, JSONResponse
 
     from ..history import get_scan_by_id, get_scans, get_stats, delete_scan
     from .. import __version__
@@ -33,11 +26,9 @@ def serve(host: str = "127.0.0.1", port: int = 9520,
     def _check_auth(request: Request):
         if not auth_token:
             return
-        q_token = request.query_params.get("token")
-        h_token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        token = q_token or h_token
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not token:
-            raise HTTPException(401, "Unauthorized — provide ?token= or Authorization: Bearer")
+            raise HTTPException(401, "Unauthorized — provide Authorization: Bearer header")
         if token != auth_token:
             raise HTTPException(403, "Forbidden — invalid token")
 
@@ -59,7 +50,7 @@ def serve(host: str = "127.0.0.1", port: int = 9520,
         _check_auth(request)
         scan = get_scan_by_id(scan_id)
         if not scan:
-            return {"error": "not found"}, 404
+            return JSONResponse({"error": "not found"}, status_code=404)
         return scan
 
     @app.get("/api/stats")
@@ -73,13 +64,25 @@ def serve(host: str = "127.0.0.1", port: int = 9520,
         ok = delete_scan(scan_id)
         return {"deleted": ok}
 
-    url = f"http://{host}:{port}"
-    if auth_token:
-        url += f"?token={auth_token}"
+    return app
+
+
+def serve(host: str = "127.0.0.1", port: int = 9520,
+          open_browser: bool = True, auth_token: Optional[str] = None):
+    """Spin up the dashboard. Optional auth via Authorization header."""
+    try:
+        import uvicorn
+    except ImportError:
+        print("Dashboard requires: pip install reporeaver[dashboard]", file=sys.stderr)
+        print("  or: pip install fastapi uvicorn jinja2", file=sys.stderr)
+        sys.exit(1)
+
+    app = _build_app(auth_token)
+
     print(f"  Dashboard: http://{host}:{port}")
     if auth_token:
-        print(f"  Auth token: {auth_token[:8]}..." if len(auth_token) > 8 else "  Auth enabled")
+        print(f"  Auth token: {auth_token[:8]}... (set as REPOREAVER_DASHBOARD_TOKEN)")
     if open_browser:
-        webbrowser.open(url)
+        webbrowser.open(f"http://{host}:{port}")
     print("  Ctrl+C to stop")
     uvicorn.run(app, host=host, port=port, log_level="warning")

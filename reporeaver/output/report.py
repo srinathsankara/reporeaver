@@ -4,7 +4,8 @@ import json
 import sys
 from typing import List
 
-from ..models import Finding, RiskScore, ScanResult, Severity, SEVERITY_ORDER
+from ..models import Finding, ScanResult, Severity, SEVERITY_ORDER
+from ..utils.text import trunc
 
 
 def _safe_print(*args, **kwargs):
@@ -12,11 +13,14 @@ def _safe_print(*args, **kwargs):
     text = " ".join(str(a) for a in args)
     try:
         print(text, **kwargs)
-    except UnicodeEncodeError:
-        safe = text.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
-            sys.stdout.encoding or "utf-8", errors="replace"
-        )
-        print(safe, **kwargs)
+    except (UnicodeEncodeError, UnicodeError):
+        enc = sys.stdout.encoding if sys.stdout.encoding and sys.stdout.encoding != "cp65001" else "utf-8"
+        try:
+            safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+            print(safe, **kwargs)
+        except (UnicodeError, LookupError):
+            safe = text.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+            print(safe, **kwargs)
 
 
 def print_report(result: ScanResult, verbose: bool = False, json_output: bool = False):
@@ -92,10 +96,8 @@ def _print_finding(f: Finding):
     if f.remediation:
         _safe_print(f"  Fix: {f.remediation}")
     if f.decoded:
-        _safe_print(f"  Decoded content: {_trunc(f.decoded, 300)}")
+        _safe_print(f"  Decoded content: {trunc(f.decoded, 300)}")
     if f.snippet:
-        _safe_print(f"  Context: {_trunc(f.snippet, 300)}")
+        _safe_print(f"  Context: {trunc(f.snippet, 300)}")
 
 
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s

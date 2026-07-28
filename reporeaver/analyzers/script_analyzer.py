@@ -2,9 +2,10 @@
 
 import json
 import re
-from typing import Dict, List, Optional, Set
+from typing import List, Optional
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc, line_of
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 HIGH_RISK_LIFECYCLE = {"preinstall", "install", "postinstall", "preuninstall", "uninstall"}
@@ -67,9 +68,9 @@ class ScriptAnalyzer(BaseAnalyzer):
         if name == "package.json":
             self._check_package_json(content, path, findings)
         elif name in ("makefile", "dockerfile", "docker-compose.yml", "docker-compose.yaml"):
-            self._check_build_file(content, path, findings)
+            self._match_patterns(content, path, findings)
         else:
-            self._check_script_file(content, path, findings)
+            self._match_patterns(content, path, findings)
 
         return AnalyzerResult(findings)
 
@@ -90,8 +91,8 @@ class ScriptAnalyzer(BaseAnalyzer):
                 findings.append(Finding(
                     path, Severity.INFO, Confidence.HIGH, Category.LIFECYCLE_HOOK,
                     title=f"Package has '{name}' lifecycle script",
-                    description=f"This script runs automatically during npm install: {_trunc(cmd, 200)}",
-                    attack_path=f"npm install -> {name} script -> {_trunc(cmd, 100)}",
+                    description=f"This script runs automatically during npm install: {trunc(cmd, 200)}",
+                    attack_path=f"npm install -> {name} script -> {trunc(cmd, 100)}",
                     remediation="Audit lifecycle scripts carefully. Use `npm install --ignore-scripts` for inspection.",
                     snippet=cmd,
                 ))
@@ -105,38 +106,26 @@ class ScriptAnalyzer(BaseAnalyzer):
             if dep_version.startswith(("http://", "https://", "git+")):
                 findings.append(Finding(
                     path, Severity.CRITICAL, Confidence.HIGH, Category.URL_DEPENDENCY,
-                    title=f"Dependency '{dep_name}' resolved from URL: {_trunc(dep_version, 100)}",
+                    title=f"Dependency '{dep_name}' resolved from URL: {trunc(dep_version, 100)}",
                     description="URL-resolved dependencies bypass package registry security and can change at any time.",
                     attack_path=f"npm install -> fetches {dep_version} -> arbitrary code execution",
                     remediation="Use registry versions with lockfiles. Pin exact versions.",
                     raw_value=dep_version,
                 ))
 
-    def _check_build_file(self, content: str, path: str, findings: List[Finding]):
-        self._match_patterns(content, path, findings)
-
-    def _check_script_file(self, content: str, path: str, findings: List[Finding]):
-        self._match_patterns(content, path, findings)
-
     def _match_patterns(self, text: str, path: str, findings: List[Finding],
                         script_name: Optional[str] = None):
         low = text.lower()
         for pat, severity, description in SUSPICIOUS_PATTERNS + CREDENTIAL_EXFIL:
             for match in re.finditer(pat, low):
-                line_no = _line_of(text, match.start())
+                line_no = line_of(text, match.start())
                 findings.append(Finding(
                     path, severity, Confidence.MEDIUM, Category.SUSPICIOUS_COMMAND,
                     title=description,
-                    description=f"Matched pattern: {_trunc(match.group(0), 120)}",
+                    description=f"Matched pattern: {trunc(match.group(0), 120)}",
                     attack_path=f"Build executes -> {description} -> potential compromise",
                     remediation="Review and remove this command. Use safer alternatives.",
-                    line_number=line_no, snippet=_trunc(text[max(0, match.start()-30):match.end()+30], 200),
+                    line_number=line_no, snippet=trunc(text[max(0, match.start()-30):match.end()+30], 200),
                 ))
 
 
-def _line_of(content: str, pos: int) -> int:
-    return content[:pos].count("\n") + 1
-
-
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s

@@ -1,6 +1,7 @@
 """Sandbox utilities — safe environment for scanning."""
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,10 +18,11 @@ def clone_to_temp(repo_url: str, branch: Optional[str] = None) -> Optional[str]:
     cmd = ["git", "clone", "--depth", "1"]
     if branch:
         cmd.extend(["--branch", branch])
-    cmd.extend([repo_url, tmp])
+    cmd.extend(["--", repo_url, tmp])
     try:
         subprocess.run(cmd, capture_output=True, timeout=60, check=True)
         return tmp
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"Warning: git clone failed: {e}", file=sys.stderr)
+        shutil.rmtree(tmp, ignore_errors=True)
         return None

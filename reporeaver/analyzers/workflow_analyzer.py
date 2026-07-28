@@ -4,6 +4,7 @@ import re
 from typing import Dict, List, Optional
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
+from ..utils.text import trunc, line_of
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 WORKFLOW_FILES = {".github/workflows/"}
@@ -93,7 +94,7 @@ class WorkflowAnalyzer(BaseAnalyzer):
                     findings.append(Finding(
                         path, severity, Confidence.MEDIUM, Category.UNPINNED_ACTION,
                         title=f"Unpinned action reference: {desc}",
-                        description=f"Line: {_trunc(line.strip(), 150)}",
+                        description=f"Line: {trunc(line.strip(), 150)}",
                         attack_path="CI runs -> unpinned action updated by attacker -> supply-chain compromise",
                         remediation="Pin actions to full commit SHA (40 char hex) for immutability.",
                         line_number=line_no, snippet=line.strip(),
@@ -106,7 +107,7 @@ class WorkflowAnalyzer(BaseAnalyzer):
                     findings.append(Finding(
                         path, severity, Confidence.HIGH, Category.CI_REMOTE_EXEC,
                         title=f"CI remote execution: {desc}",
-                        description=f"CI step downloads and/or executes code from network: {_trunc(line.strip(), 200)}",
+                        description=f"CI step downloads and/or executes code from network: {trunc(line.strip(), 200)}",
                         attack_path="CI pipeline -> remote fetch -> execute untrusted code -> compromise",
                         remediation="Avoid downloading and executing remote content in CI. Use pinned actions with checksums.",
                         line_number=line_no, snippet=line.strip(),
@@ -119,7 +120,7 @@ class WorkflowAnalyzer(BaseAnalyzer):
                     findings.append(Finding(
                         path, severity, Confidence.HIGH, Category.CI_SECRET_EXPOSURE,
                         title=f"CI secrets exposure: {desc}",
-                        description=f"Potential secret exposure: {_trunc(line.strip(), 200)}",
+                        description=f"Potential secret exposure: {trunc(line.strip(), 200)}",
                         attack_path="CI step runs -> secrets leaked in logs or exfiltrated -> credential theft",
                         remediation="Use GitHub Actions secrets securely. Avoid echoing or piping secrets.",
                         line_number=line_no, snippet=line.strip(),
@@ -132,7 +133,7 @@ class WorkflowAnalyzer(BaseAnalyzer):
                     findings.append(Finding(
                         path, severity, Confidence.LOW, Category.INFO,
                         title=f"CI action: {desc}",
-                        description=f"Action reference: {_trunc(line.strip(), 100)}",
+                        description=f"Action reference: {trunc(line.strip(), 100)}",
                         attack_path="CI executes action -> behavior depends on action trustworthiness",
                         remediation="Verify action source and pin to SHA.",
                         line_number=line_no, snippet=line.strip(),
@@ -156,7 +157,7 @@ class WorkflowAnalyzer(BaseAnalyzer):
                 description="Self-hosted runners may have less isolation and broader access to internal network.",
                 attack_path="CI runs on self-hosted -> broader blast radius -> lateral movement possible",
                 remediation="Use GitHub-hosted runners if possible. Harden self-hosted runners.",
-                line_number=_line_of(content, match.start()),
+                line_number=line_of(content, match.start()),
             ))
 
     def _check_reusable_workflows(self, content: str, path: str, findings: List[Finding]):
@@ -173,7 +174,7 @@ class WorkflowAnalyzer(BaseAnalyzer):
                         description=f"Reusable workflow from '{ref}' at '{version}' — external code runs in CI.",
                         attack_path="CI runs -> external workflow code executes -> supply-chain risk",
                         remediation="Pin reusable workflows to full commit SHA. Audit external sources.",
-                        line_number=_line_of(content, match.start()),
+                        line_number=line_of(content, match.start()),
                         raw_value=f"{ref}@{version}",
                     ))
 
@@ -203,10 +204,3 @@ class WorkflowAnalyzer(BaseAnalyzer):
                 remediation="Restrict dispatch triggers to trusted actors. Validate inputs.",
             ))
 
-
-def _line_of(content: str, pos: int) -> int:
-    return content[:pos].count("\n") + 1
-
-
-def _trunc(s: str, n: int) -> str:
-    return s[:n] + "..." if len(s) > n else s

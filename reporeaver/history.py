@@ -1,5 +1,6 @@
 """Scan history — persists results to SQLite for the dashboard."""
 
+import copy
 import json
 import os
 import sqlite3
@@ -10,8 +11,28 @@ from typing import Any, Dict, List, Optional
 HISTORY_DIR = Path.home() / ".reporeaver"
 HISTORY_DB = HISTORY_DIR / "history.db"
 
+SENSITIVE_FIELDS = {"raw", "decoded", "value"}
+
+
+def _redact_findings(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Strip sensitive/secret payloads before persisting to history DB."""
+    redacted = copy.deepcopy(findings)
+    for f in redacted:
+        for field in SENSITIVE_FIELDS:
+            if field in f:
+                f[field] = "<redacted>"
+        for field in ("snippet", "description"):
+            if field in f and isinstance(f[field], str) and len(f[field]) > 120:
+                f[field] = f[field][:120] + "..."
+        if "context" in f and isinstance(f.get("context"), str) and len(f["context"]) > 120:
+            f["context"] = f["context"][:120] + "..."
+    return redacted
+
 # Schema migrations for when we inevitably break things
+SCHEMA_VERSION = 1
+
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS schema_version (version INTEGER);
 CREATE TABLE IF NOT EXISTS scans (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     target      TEXT NOT NULL,
@@ -46,7 +67,33 @@ def _get_db() -> sqlite3.Connection:
     db = sqlite3.connect(str(HISTORY_DB))
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    row = db.execute("SELECT version FROM schema_version").fetchone()
+    current_version = row["version"] if row else 0
+    if current_version != SCHEMA_VERSION:
+        db.executescript("DROP TABLE IF EXISTS scans; DROP TABLE IF EXISTS scan_tags; DROP TABLE IF EXISTS schema_version;")
+        db.executescript(SCHEMA)
+        db.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+        db.commit()
     return db
+
+
+def save_scan_history(result) -> int:
+    """Save a ScanResult object to the history database."""
+    from .models import RiskScore
+    rs = result.risk_score or RiskScore(0.0, None)
+    return save_scan(
+        target=result.target,
+        scan_time=result.scan_time,
+        duration_ms=0,
+        files_count=result.files_scanned,
+        risk_score=rs.score,
+        max_sev=(rs.max_severity.value if rs.max_severity else "info"),
+        critical=rs.critical,
+        high=rs.high,
+        medium=rs.medium,
+        low=rs.low,
+        findings=result.to_dict().get("findings", []),
+    )
 
 
 def save_scan(
@@ -65,6 +112,7 @@ def save_scan(
     html_path: Optional[str] = None,
     tags: Optional[List[str]] = None,
 ) -> int:
+    findings_clean = _redact_findings(findings)
     db = _get_db()
     try:
         cur = db.execute(
@@ -76,7 +124,7 @@ def save_scan(
             (
                 target, scan_time, duration_ms, files_count,
                 risk_score, max_sev, critical, high, medium, low,
-                json.dumps(findings), sarif_path, html_path,
+                json.dumps(findings_clean), sarif_path, html_path,
             ),
         )
         scan_id = cur.lastrowid

