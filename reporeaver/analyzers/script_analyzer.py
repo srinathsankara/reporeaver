@@ -99,7 +99,11 @@ class ScriptAnalyzer(BaseAnalyzer):
 
             self._match_patterns(cmd, path, findings, script_name=name)
 
-        deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+        deps = {}
+        for key in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+            val = data.get(key, {})
+            if isinstance(val, dict):
+                deps.update(val)
         for dep_name, dep_version in deps.items():
             if not isinstance(dep_version, str):
                 continue

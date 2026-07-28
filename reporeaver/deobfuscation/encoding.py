@@ -1,6 +1,7 @@
 """Encoding deobfuscation — decode base64, hex, gzip, and layered encodings."""
 
 import base64
+import binascii
 import gzip
 import logging
 import re
@@ -23,7 +24,7 @@ def try_decode(data: str, max_depth: int = 3) -> Optional[str]:
             if _is_meaningful(decoded):
                 result = try_decode(decoded.strip(), max_depth - 1)
                 return result or decoded
-        except Exception as exc:
+        except (ValueError, UnicodeDecodeError) as exc:
             log.debug("hex decode failed: %s", exc)
 
     b64_pattern = re.compile(r'^[A-Za-z0-9+/=]+$')
@@ -33,7 +34,7 @@ def try_decode(data: str, max_depth: int = 3) -> Optional[str]:
             if _is_meaningful(decoded):
                 result = try_decode(decoded.strip(), max_depth - 1)
                 return result or decoded
-        except Exception as exc:
+        except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
             log.debug("base64 decode failed: %s", exc)
 
     # Try gzip decompress
@@ -42,7 +43,7 @@ def try_decode(data: str, max_depth: int = 3) -> Optional[str]:
         decoded = gzip.decompress(raw).decode("utf-8", errors="replace")
         if _is_meaningful(decoded):
             return decoded
-    except Exception as exc:
+    except (ValueError, UnicodeDecodeError, binascii.Error, OSError) as exc:
         log.debug("gzip decompress failed: %s", exc)
 
     # Try URL decode
@@ -52,7 +53,7 @@ def try_decode(data: str, max_depth: int = 3) -> Optional[str]:
         if decoded != original and _is_meaningful(decoded):
             result = try_decode(decoded, max_depth - 1)
             return result or decoded
-    except Exception as exc:
+    except (ValueError, TypeError) as exc:
         log.debug("URL decode failed: %s", exc)
 
     return None
@@ -63,7 +64,7 @@ def decode_js_string(text: str) -> Optional[str]:
         result = text.encode("utf-8").decode("unicode_escape")
         if result != text:
             return result
-    except Exception as exc:
+    except (ValueError, UnicodeDecodeError) as exc:
         log.debug("unicode_escape decode failed: %s", exc)
     return None
 
@@ -75,6 +76,6 @@ def _is_meaningful(text: str) -> bool:
     if (printable / len(text)) < 0.7:
         return False
     space_count = text.count(" ")
-    if space_count == 0 and len(text) > 20:
+    if space_count == 0 and len(text) > 50 and all(c.isalpha() for c in text):
         return False
     return True

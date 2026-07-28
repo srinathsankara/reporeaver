@@ -96,7 +96,7 @@ class URLNetworkAnalyzer(BaseAnalyzer):
                      findings: List[Finding], context: str):
         try:
             parsed = urlparse(url)
-        except Exception as exc:
+        except (ValueError, TypeError) as exc:
             log.debug("urlparse failed for %s: %s", url, exc)
             return
         hostname = (parsed.hostname or "").lower()
@@ -110,10 +110,10 @@ class URLNetworkAnalyzer(BaseAnalyzer):
         # Check for IP address targets
         try:
             ip = ipaddress.ip_address(hostname)
+            if ip.is_loopback:
+                signals.append(f"Loopback address ({hostname})")
             if ip.is_private:
                 signals.append(f"Private IP address ({hostname}) — possible SSRF or internal scan")
-            elif ip.is_loopback:
-                signals.append(f"Loopback address ({hostname})")
         except ValueError:
             pass
 
@@ -129,7 +129,7 @@ class URLNetworkAnalyzer(BaseAnalyzer):
 
         # Check known C2 indicators
         for c2 in KNOWN_C2_DOMAINS:
-            if c2 in hostname:
+            if hostname == c2 or hostname.endswith("." + c2):
                 signals.append(f"Hostname matches known C2/paste pattern: {c2}")
 
         # Check URL length
@@ -137,8 +137,8 @@ class URLNetworkAnalyzer(BaseAnalyzer):
             signals.append(f"Unusually long URL ({len(url)} chars)")
 
         # Check for auth in URL
-        if "@" in hostname:
-            signals.append("URL contains embedded credentials (@ host)")
+        if parsed.username or parsed.password:
+            signals.append("URL contains embedded credentials")
 
         if not signals:
             return
@@ -170,8 +170,9 @@ class URLNetworkAnalyzer(BaseAnalyzer):
                     if hostname.lower() in SAFE_PACKAGE_REGISTRIES or \
                        any(hostname.lower().endswith("." + d) for d in SAFE_PACKAGE_REGISTRIES):
                         continue
-                except Exception as exc:
+                except (ValueError, TypeError) as exc:
                     log.debug("urlparse failed for %s: %s", url, exc)
+                    continue
 
                 findings.append(Finding(
                     path, Severity.HIGH, Confidence.MEDIUM, Category.RUNTIME_NETWORK_CALL,

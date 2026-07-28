@@ -149,6 +149,8 @@ def _ingest_zip(path: Path, depth: int = 0) -> IngestResult:
                         nested = _extract_archive_bytes(raw, name, depth + 1)
                         files.extend(nested.files)
                         continue
+                    except MemoryError:
+                        raise
                     except Exception as exc:
                         log.debug("Nested zip extract failed for %s: %s", name, exc)
                 mime = guess_mime(name)
@@ -202,6 +204,8 @@ def _ingest_tar(path: Path, depth: int = 0) -> IngestResult:
                         nested = _extract_archive_bytes(raw, name, depth + 1)
                         files.extend(nested.files)
                         continue
+                    except MemoryError:
+                        raise
                     except Exception as exc:
                         log.debug("Nested tar extract failed for %s: %s", name, exc)
                 mime = guess_mime(name)

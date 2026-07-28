@@ -130,7 +130,7 @@ SECRET_PATTERNS: List[SecretPattern] = [
 ENTROPY_FLOOR = 4.5
 
 # Files to skip entirely (lockfiles, minified bundles, etc.)
-SKIP_PATHS = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "Gemfile.lock",
+SKIP_PATHS = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "gemfile.lock",
               "poetry.lock", "composer.lock"}
 
 # Skip lines that are clearly hashes, not secrets

@@ -1,6 +1,7 @@
 """SVG analyzer — scripts, event handlers, XXE, data URIs, foreign objects."""
 
 import base64
+import binascii
 import logging
 import re
 from typing import Optional
@@ -63,7 +64,7 @@ JAVASCRIPT_URI = re.compile(r'href\s*=\s*(["\'])\s*javascript:([^"\']+)\1', re.I
 EXTERNAL_LINK = re.compile(r'(?:href|xlink:href)\s*=\s*(["\'])(https?://[^"\']+)\1', re.IGNORECASE)
 CSS_EXPRESSION = re.compile(r'(?:expression|javascript)\s*:', re.IGNORECASE)
 ATOB_B64 = re.compile(r'(?:btoa|atob)\s*\(\s*(["\'])([A-Za-z0-9+/=]{20,})\1\s*\)')
-LONG_B64 = re.compile(r'([A-Za-z0-9+/]{40,}={0,2})')
+LONG_B64 = re.compile(r'([A-Za-z0-9+/]{20,}={0,2})')
 
 
 @register_analyzer
@@ -289,13 +290,13 @@ def try_base64_decode(text: str) -> Optional[str]:
     for match in ATOB_B64.finditer(text):
         try:
             return base64.b64decode(match.group(2)).decode("utf-8", errors="replace")
-        except Exception as exc:
+        except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
             log.debug("atob decode failed: %s", exc)
     long_match = LONG_B64.search(text)
     if long_match:
         try:
             return base64.b64decode(long_match.group(1)).decode("utf-8", errors="replace")
-        except Exception as exc:
+        except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
             log.debug("base64 decode failed: %s", exc)
     return None
 
