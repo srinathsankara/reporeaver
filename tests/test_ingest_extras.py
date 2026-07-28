@@ -3,16 +3,21 @@
 import io
 import tarfile
 import zipfile
+from unittest.mock import patch
+
+import pytest
 
 from reporeaver.ingest import ArchiveIngester
 from reporeaver.ingest.single import (
     MAX_FILE_COUNT,
     MAX_FILE_SIZE,
     TOTAL_MAX_SIZE,
+    DirectoryIngester,
     _extract_archive_bytes,
     _ingest_tar,
     _ingest_zip,
     _is_bomb,
+    _make_entry,
     _should_skip_name,
 )
 
@@ -100,6 +105,15 @@ class TestIngestZip:
         result = _ingest_zip(zpath)
         assert result.total_files <= MAX_FILE_COUNT
 
+    def test_zip_nested_memory_error(self, tmp_path):
+        zpath = tmp_path / "memfail.zip"
+        with zipfile.ZipFile(str(zpath), "w") as z:
+            z.writestr("inner.zip", b"not-a-real-zip")
+        with patch("zipfile.ZipFile.open", side_effect=MemoryError("decompression bomb")):
+            import pytest
+            with pytest.raises(MemoryError):
+                _ingest_zip(zpath)
+
 
 class TestIngestTar:
     def test_ingest_simple_tar(self, tmp_path):
@@ -112,6 +126,16 @@ class TestIngestTar:
         paths = {f.path for f in result.files}
         assert "a.js" in paths
         assert "b.txt" in paths
+
+    def test_tar_nested_memory_error(self, tmp_path):
+        tpath = tmp_path / "memfail.tar"
+        with tarfile.open(str(tpath), "w") as t:
+            info = tarfile.TarInfo("inner.tar")
+            info.size = 10
+            t.addfile(info, io.BytesIO(b"not-a-real-tar"))
+        with patch("tarfile.TarFile.extractfile", side_effect=MemoryError("decompression bomb")):
+            with pytest.raises(MemoryError):
+                _ingest_tar(tpath)
 
 
 class TestExtractArchiveBytes:
@@ -139,6 +163,14 @@ class TestExtractArchiveBytes:
         result = _extract_archive_bytes(b"not an archive", "random.bin", 1)
         assert result.source_type == "nested_unknown"
 
+    def test_extract_zip_with_ignore_dir(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("node_modules/evil.js", "bad")
+        data = buf.getvalue()
+        result = _extract_archive_bytes(data, "outer.zip", 1)
+        assert result.total_files == 0
+
 
 class TestArchiveIngester:
     def test_rar_not_implemented(self, tmp_path):
@@ -154,3 +186,25 @@ class TestArchiveIngester:
         ingester = ArchiveIngester()
         result = ingester.ingest(str(f))
         assert result.source_type == "archive"
+
+
+class TestDirectoryIngester:
+    def test_path_traversal_error_handled(self, tmp_path):
+        ingester = DirectoryIngester()
+        with patch.object(type(tmp_path), "rglob", return_value=[tmp_path / ".." / "escaped.txt"]):
+            with patch("pathlib.Path.is_file", return_value=True):
+                result = ingester.ingest(str(tmp_path))
+                assert result.total_files == 0
+
+
+class TestMakeEntry:
+    def test_symlink_skipped(self, tmp_path):
+        link = tmp_path / "link.txt"
+        real = tmp_path / "real.txt"
+        real.write_text("content")
+        try:
+            link.symlink_to(real)
+        except OSError:
+            pytest.skip("symlink not supported on this platform")
+        entry = _make_entry(link)
+        assert entry is None

@@ -78,8 +78,8 @@ class TestAnalyzeFile:
     def test_text_analyzer_error_logged(self, caplog):
         class FailingAnalyzer:
             name = "fail"
-            should_analyze = lambda self, e: True
-            analyze = lambda self, e, c: (_ for _ in ()).throw(Exception("boom"))
+            def should_analyze(self, e): return True
+            def analyze(self, e, c): raise Exception("boom")
         entry = FileEntry(path="test.txt", size=5, is_text=True)
         findings, errors = _analyze_file(entry, "hello", b"", [FailingAnalyzer()], [])
         assert errors == 1
@@ -88,8 +88,8 @@ class TestAnalyzeFile:
     def test_binary_analyzer_error_logged(self, caplog):
         class FailingBinAnalyzer:
             name = "bfail"
-            should_analyze = lambda self, e: True
-            analyze_binary = lambda self, e, r: (_ for _ in ()).throw(Exception("bboom"))
+            def should_analyze(self, e): return True
+            def analyze_binary(self, e, r): raise Exception("bboom")
         entry = FileEntry(path="test.bin", size=5, is_text=False)
         findings, errors = _analyze_file(entry, "", b"raw", [], [FailingBinAnalyzer()])
         assert errors == 1

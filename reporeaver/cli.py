@@ -87,17 +87,28 @@ def main():
 
         cfg_file = find_config(path if path.is_dir() else path.parent)
         cfg_dict = load_config(cfg_file) if cfg_file else {}
-        # CLI args override config file values; config defaults are fallback
-        config = RepoReaverConfig(
-            cache_dir=cache_dir,
-            diff_only=args.diff_mode if args.diff_mode else cfg_dict.get("diff_only", False),
-            workers=args.workers if args.workers is not None else cfg_dict.get("workers", 4),
-            max_size_mb=args.max_size if args.max_size is not None else cfg_dict.get("max_size_mb", 2.0),
-            policy=args.policy if args.policy is not None else cfg_dict.get("policy"),
-            skip_analyzers=skip_list if skip_list is not None else cfg_dict.get("skip_analyzers"),
-            quick_mode=args.quick if args.quick else cfg_dict.get("quick_mode", False),
-            no_cache=args.no_cache,
-        )
+        # Precedence: CLI args > config file > env vars > dataclass defaults
+        config = RepoReaverConfig.from_env()
+        for k, v in cfg_dict.items():
+            if hasattr(config, k) and v is not None:
+                setattr(config, k, v)
+        if args.diff_mode:
+            config.diff_only = True
+        if args.workers is not None:
+            config.workers = args.workers
+        if args.max_size is not None:
+            config.max_size_mb = args.max_size
+        if args.policy is not None:
+            config.policy = args.policy
+        if skip_list is not None:
+            config.skip_analyzers = skip_list
+        if args.quick:
+            config.quick_mode = True
+        if args.no_cache:
+            config.no_cache = True
+        if not args.no_cache:
+            if cache_dir:
+                config.cache_dir = cache_dir
         save_history = not args.no_history
         if save_history:
             try:

@@ -99,3 +99,36 @@ class TestLoadConfig:
             p.write_text(": : invalid", encoding="utf-8")
             data = load_config(p)
             assert data == {}
+
+
+class TestFromEnv:
+    def test_from_env_empty(self):
+        cfg = RepoReaverConfig.from_env()
+        assert cfg.workers == 4
+        assert cfg.diff_only is False
+
+    def test_from_env_workers(self, monkeypatch):
+        monkeypatch.setenv("REPOREAVER_WORKERS", "8")
+        cfg = RepoReaverConfig.from_env()
+        assert cfg.workers == 8
+
+    def test_from_env_invalid_workers_ignored(self, monkeypatch):
+        monkeypatch.setenv("REPOREAVER_WORKERS", "not-a-number")
+        cfg = RepoReaverConfig.from_env()
+        assert cfg.workers == 4
+
+    def test_from_env_quick_and_no_cache(self, monkeypatch):
+        monkeypatch.setenv("REPOREAVER_QUICK", "1")
+        monkeypatch.setenv("REPOREAVER_NO_CACHE", "1")
+        cfg = RepoReaverConfig.from_env()
+        assert cfg.quick_mode is True
+        assert cfg.no_cache is True
+
+    def test_from_env_dirs(self, monkeypatch):
+        monkeypatch.setenv("REPOREAVER_FEEDS_DIR", "/tmp/feeds")
+        monkeypatch.setenv("REPOREAVER_HISTORY_DIR", "/tmp/hist")
+        monkeypatch.setenv("REPOREAVER_CACHE_DIR", "/tmp/cache")
+        cfg = RepoReaverConfig.from_env()
+        assert cfg.feeds_dir == Path("/tmp/feeds")
+        assert cfg.history_dir == Path("/tmp/hist")
+        assert cfg.cache_dir == Path("/tmp/cache")

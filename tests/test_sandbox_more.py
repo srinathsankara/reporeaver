@@ -1,9 +1,28 @@
-"""Additional sandbox tests — temp dir cleanup on failure."""
+"""Additional sandbox tests — temp dir cleanup on failure and URL validation."""
 
 import subprocess
 from unittest.mock import patch
 
-from reporeaver.utils.sandbox import clone_to_temp
+from reporeaver.utils.sandbox import _is_unsafe_url, clone_to_temp
+
+
+class TestIsUnsafeUrl:
+    def test_https_is_safe(self):
+        assert not _is_unsafe_url("https://github.com/user/repo.git")
+
+    def test_http_is_safe(self):
+        assert not _is_unsafe_url("http://example.com/repo")
+
+    def test_file_url_is_unsafe(self):
+        assert _is_unsafe_url("file:///etc/passwd")
+
+    def test_local_path_is_unsafe(self):
+        assert _is_unsafe_url("/home/user/repo")
+        assert _is_unsafe_url("./local/repo")
+
+    def test_unknown_scheme_is_unsafe(self):
+        assert _is_unsafe_url("ssh://git@host/repo")
+        assert _is_unsafe_url("ftp://files.example.com/repo")
 
 
 class TestSandboxCleanup:
