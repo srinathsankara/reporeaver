@@ -41,14 +41,12 @@ class TestMakeEntry:
 
 
 class TestBuildEntry:
-    def test_hash_error_logged(self, tmp_path):
+    def test_make_entry_skips_hash(self, tmp_path):
         f = tmp_path / "test.txt"
         f.write_text("content")
-        with patch("reporeaver.ingest.single.hashlib") as mock_hashlib:
-            mock_hashlib.sha256.side_effect = Exception("hash failed")
-            entry = _make_entry(f)
-            assert entry is not None
-            assert entry.hash_sha256 is None
+        entry = _make_entry(f)
+        assert entry is not None
+        assert entry.hash_sha256 is None
 
     def test_no_disk_path_no_hash(self):
         entry = _build_entry("test.txt", 100, "text/plain", ".txt")

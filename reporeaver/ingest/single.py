@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: MIT
 """Ingesters for single files, directories, and archives (including nested)."""
 
-import hashlib
 import io
 import logging
 import tarfile
@@ -276,32 +275,19 @@ def _make_entry(path: Path, rel: Optional[str] = None) -> Optional[FileEntry]:
         size = path.stat().st_size
         mime = guess_mime(fpath)
         ext = path.suffix.lower()
-        return _build_entry(fpath, size, mime, ext, path)
+        return _build_entry(fpath, size, mime, ext)
     except (OSError, FileNotFoundError):
         return None
 
 
-def _build_entry(fpath: str, size: int, mime: str, ext: str,
-                 disk_path: Optional[Path] = None) -> Optional[FileEntry]:
-    """Build a FileEntry with optional SHA-256 hash."""
+def _build_entry(fpath: str, size: int, mime: str, ext: str) -> FileEntry:
+    """Build a FileEntry (hash deferred to pipeline to avoid double read)."""
     fpath = fpath.replace("\\", "/")
-    hash_val = None
-    if disk_path and size < MAX_FILE_SIZE and size > 0:
-        try:
-            h = hashlib.sha256()
-            with open(disk_path, "rb") as f:
-                for chunk in iter(lambda: f.read(65536), b""):
-                    h.update(chunk)
-            hash_val = h.hexdigest()
-        except Exception as exc:
-            log.debug("Hash computation failed for %s: %s", disk_path, exc)
-
     return FileEntry(
         path=fpath,
         size=size,
         detected_mime=mime,
         declared_ext=ext,
-        hash_sha256=hash_val,
         is_text="text" in (mime or ""),
         is_svg=fpath.lower().endswith(".svg"),
         is_script=fpath.lower().endswith(tuple(SCRIPT_EXTS)),

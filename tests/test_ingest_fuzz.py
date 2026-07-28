@@ -145,15 +145,15 @@ class TestFuzzBuildEntry:
     """Edge cases for _build_entry."""
 
     def test_empty_content(self):
-        entry = _build_entry("/tmp/empty.txt", 0, "text/plain", ".txt", io.BytesIO(b""))
+        entry = _build_entry("/tmp/empty.txt", 0, "text/plain", ".txt")
         assert entry is not None
 
     def test_large_content(self):
-        entry = _build_entry("/tmp/large.txt", 1000, "text/plain", ".txt", io.BytesIO(b"x" * 1000))
+        entry = _build_entry("/tmp/large.txt", 1000, "text/plain", ".txt")
         assert entry is not None
 
     def test_binary_content(self):
-        entry = _build_entry("/tmp/data.bin", 100, "application/octet-stream", ".bin", io.BytesIO(os.urandom(100)))
+        entry = _build_entry("/tmp/data.bin", 100, "application/octet-stream", ".bin")
         assert entry is not None
         assert not entry.is_text
 

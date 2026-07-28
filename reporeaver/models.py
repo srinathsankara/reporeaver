@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Data models. Nothing fancy, just the shapes we pass around."""
 
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -145,10 +146,11 @@ class RiskScore:
 
     @classmethod
     def compute(cls, findings: List[Finding]) -> "RiskScore":
-        c = sum(1 for f in findings if f.severity == Severity.CRITICAL)
-        h = sum(1 for f in findings if f.severity == Severity.HIGH)
-        m = sum(1 for f in findings if f.severity == Severity.MEDIUM)
-        low_count = sum(1 for f in findings if f.severity == Severity.LOW)
+        counts = Counter(f.severity for f in findings)
+        c = counts.get(Severity.CRITICAL, 0)
+        h = counts.get(Severity.HIGH, 0)
+        m = counts.get(Severity.MEDIUM, 0)
+        low_count = counts.get(Severity.LOW, 0)
         # rough heuristic: 3 pts per critical, 1.5 per high, 0.5 per medium
         score = min(10.0, c * 3.0 + h * 1.5 + m * 0.5)
         max_sev = Severity.CRITICAL if c else Severity.HIGH if h else Severity.MEDIUM if m else Severity.LOW if low_count else Severity.INFO

@@ -3,10 +3,14 @@
 
 Fetches and caches vulnerability data for dependency checking.
 All network calls are opt-in (user must configure).
+
+Cache/data directory can be overridden via REPOREAVER_FEEDS_DIR env var
+or by calling set_feeds_dir(). Defaults to ~/.reporeaver/feeds/.
 """
 
 import json
 import logging
+import os
 import sqlite3
 import time
 import urllib.error
@@ -17,8 +21,8 @@ from typing import Any, Dict, List, Optional
 
 log = logging.getLogger("reporeaver.feeds")
 
-FEED_DIR = Path.home() / ".reporeaver" / "feeds"
-FEED_DB = FEED_DIR / "feeds.db"
+_FEED_DIR = Path(os.environ.get("REPOREAVER_FEEDS_DIR") or Path.home() / ".reporeaver" / "feeds")
+FEED_DB = _FEED_DIR / "feeds.db"
 
 # Hook for test injection — production uses urllib.request.urlopen
 _urlopen = urllib.request.urlopen
@@ -35,7 +39,7 @@ C2_FEED_URL = "https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt
 
 
 def _init_db():
-    FEED_DIR.mkdir(parents=True, exist_ok=True)
+    _FEED_DIR.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(str(FEED_DB))
     db.execute("""
         CREATE TABLE IF NOT EXISTS feed_cache (

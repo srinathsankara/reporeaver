@@ -3,14 +3,13 @@
 
 import logging
 import re
-import string
 from typing import List, Optional
 
 log = logging.getLogger("reporeaver.entropy")
 
 from ..models import Category, Confidence, FileEntry, Finding, Severity
 from ..utils.entropy import shannon
-from ..utils.text import trunc
+from ..utils.text import is_meaningful_text, trunc
 from .base import AnalyzerResult, BaseAnalyzer, register_analyzer
 
 ENTROPY_THRESHOLD = 5.5
@@ -100,10 +99,7 @@ def _try_decode(data: str) -> Optional[str]:
 
 def _has_meaningful_content(text: str) -> bool:
     """Check if decoded text looks like meaningful content (not random bytes)."""
-    if len(text) < 10:
-        return False
-    printable = sum(1 for c in text if c in string.printable)
-    return (printable / len(text)) > 0.7
+    return is_meaningful_text(text, min_len=10)
 
 
 

@@ -26,7 +26,7 @@ EXIT_THRESHOLD = 7.0
 
 
 def _read_entry(entry: FileEntry, target_dir: Path, max_size_mb: int) -> Tuple[str, bytes]:
-    """Read a file from disk, returning (content, raw_bytes) or ("", b"")."""
+    """Read a file from disk, updating entry hash. Returns (content, raw_bytes) or ("", b"")."""
     content = ""
     raw_bytes = b""
     try:
@@ -35,9 +35,10 @@ def _read_entry(entry: FileEntry, target_dir: Path, max_size_mb: int) -> Tuple[s
         if full.exists():
             st = full.stat()
             if st.st_size <= max_size_mb * 1024 * 1024:
-                with open(str(full), "r", encoding="utf-8", errors="replace") as fh:
-                    content = fh.read()
-                raw_bytes = content.encode("utf-8", errors="replace")
+                with open(str(full), "rb") as fh:
+                    raw_bytes = fh.read()
+                content = raw_bytes.decode("utf-8", errors="replace")
+                entry.hash_sha256 = hashlib.sha256(raw_bytes).hexdigest()
             else:
                 log.debug("Skipping large file (%d bytes): %s", st.st_size, entry.path)
     except (ValueError, OSError) as exc:

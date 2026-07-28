@@ -3,12 +3,13 @@
 
 import copy
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-HISTORY_DIR = Path.home() / ".reporeaver"
-HISTORY_DB = HISTORY_DIR / "history.db"
+_HISTORY_DIR = Path(os.environ.get("REPOREAVER_HISTORY_DIR") or Path.home() / ".reporeaver")
+HISTORY_DB = _HISTORY_DIR / "history.db"
 
 SENSITIVE_FIELDS = {"raw", "decoded", "value"}
 
@@ -62,7 +63,7 @@ CREATE INDEX IF NOT EXISTS idx_risk_score ON scans(risk_score);
 
 
 def _get_db() -> sqlite3.Connection:
-    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    _HISTORY_DIR.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(str(HISTORY_DB))
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)

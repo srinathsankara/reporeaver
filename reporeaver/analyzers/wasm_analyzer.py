@@ -44,7 +44,7 @@ class WasmAnalyzer(BaseAnalyzer):
         return name.endswith(".wasm") or entry.detected_mime == "application/wasm"
 
     def analyze(self, entry: FileEntry, content: str) -> AnalyzerResult:
-        return AnalyzerResult([])
+        raise TypeError("WasmAnalyzer is a binary analyzer; call analyze_binary() instead")
 
     def analyze_binary(self, entry: FileEntry, data: bytes) -> AnalyzerResult:
         findings: List[Finding] = []
@@ -139,37 +139,6 @@ def _parse_imports(data: bytes) -> List[tuple]:
             pos = section_end
 
     return imports
-
-
-def _parse_exports(data: bytes) -> List[str]:
-    exports: List[str] = []
-    pos = 8
-
-    while pos < len(data):
-        if pos >= len(data):
-            break
-        section_id = data[pos]
-        pos += 1
-        section_size, pos = _read_leb128(data, pos)
-        if section_size is None:
-            break
-        section_end = pos + section_size
-
-        if section_id == SECTION_EXPORT:
-            count, pos = _read_leb128(data, pos)
-            if count is None or count > 50000:
-                break
-            for _ in range(count):
-                name, pos = _read_name(data, pos)
-                if name:
-                    exports.append(name)
-                if pos < len(data):
-                    pos += 2  # export kind(1) + index(1)
-            pos = section_end
-        else:
-            pos = section_end
-
-    return exports
 
 
 def _read_leb128(data: bytes, pos: int) -> tuple:

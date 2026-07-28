@@ -8,7 +8,6 @@ from reporeaver.analyzers.wasm_analyzer import (
     WASM_MAGIC,
     WASM_VERSION,
     WasmAnalyzer,
-    _parse_exports,
     _parse_imports,
     _read_leb128,
     _read_name,
@@ -35,6 +34,34 @@ def _section(section_id: int, payload: bytes) -> bytes:
 
 
 WASM_HEADER = WASM_MAGIC + WASM_VERSION
+
+
+def _parse_exports(data: bytes) -> list:
+    exports = []
+    pos = 8
+    while pos < len(data):
+        if pos >= len(data):
+            break
+        section_id = data[pos]
+        pos += 1
+        section_size, pos = _read_leb128(data, pos)
+        if section_size is None:
+            break
+        section_end = pos + section_size
+        if section_id == SECTION_EXPORT:
+            count, pos = _read_leb128(data, pos)
+            if count is None or count > 50000:
+                break
+            for _ in range(count):
+                name, pos = _read_name(data, pos)
+                if name:
+                    exports.append(name)
+                if pos < len(data):
+                    pos += 2
+            pos = section_end
+        else:
+            pos = section_end
+    return exports
 
 
 @pytest.fixture
@@ -324,8 +351,9 @@ class TestAnalyzeBinaryFindings:
 
 
 class TestAnalyzeTextFallback:
-    def test_text_analyze_returns_empty(self):
+    def test_text_analyze_raises_typeerror(self):
         a = WasmAnalyzer()
         e = FileEntry(path="x.wasm", size=10, hash_sha256="a", is_text=False)
-        res = a.analyze(e, "content")
-        assert len(res.findings) == 0
+        import pytest
+        with pytest.raises(TypeError):
+            a.analyze(e, "content")

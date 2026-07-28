@@ -55,6 +55,23 @@ class TestPolicy:
         assert not p.is_blocked(f)
 
 
+def test_severity_threshold_filters_below_threshold():
+    p = Policy(severity_threshold="critical")
+    low = _finding("c2_callback", Severity.LOW)
+    critical = _finding("c2_callback", Severity.CRITICAL)
+    result = p.evaluate([low, critical])
+    assert len(result) == 1
+    assert result[0].severity == Severity.CRITICAL
+
+
+def test_severity_threshold_allows_all_when_threshold_low():
+    p = Policy(severity_threshold="info")
+    low = _finding("c2_callback", Severity.LOW)
+    high = _finding("c2_callback", Severity.HIGH)
+    result = p.evaluate([low, high])
+    assert len(result) == 2
+
+
 def test_load_policy_from_yaml(tmp_path):
     yaml_file = tmp_path / "test_policy.yaml"
     yaml_file.write_text("""

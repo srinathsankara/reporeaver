@@ -1,7 +1,10 @@
+# SPDX-License-Identifier: MIT
 - id: reporeaver
-  name: RepoReaver
-  description: Scan staged files for security threats before committing
-  entry: reporeaver scan --diff-only
+  name: reporeaver
+  description: "Pre-clone repo security scanner — detects obfuscated payloads, C2 callbacks, and CI/CD abuse"
+  entry: reporeaver scan
   language: python
-  types: [text]
-  stages: [commit]
+  types: [directory]
+  pass_filenames: false
+  always_run: true
+  stages: [manual]

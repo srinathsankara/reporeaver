@@ -2,6 +2,7 @@
 """Configuration dataclass for RepoReaver scans."""
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -24,6 +25,43 @@ class RepoReaverConfig:
     skip_analyzers: Optional[List[str]] = None
     quick_mode: bool = False
     no_cache: bool = False
+    feeds_dir: Optional[Path] = None
+    history_dir: Optional[Path] = None
+
+    @classmethod
+    def from_env(cls) -> "RepoReaverConfig":
+        """Create config from REPOREAVER_* environment variables (CLI overrides)."""
+        kwargs = {}
+        cache = os.environ.get("REPOREAVER_CACHE_DIR")
+        if cache:
+            kwargs["cache_dir"] = Path(cache)
+        if os.environ.get("REPOREAVER_DIFF_ONLY"):
+            kwargs["diff_only"] = True
+        workers = os.environ.get("REPOREAVER_WORKERS")
+        if workers:
+            try:
+                kwargs["workers"] = int(workers)
+            except ValueError:
+                pass
+        max_size = os.environ.get("REPOREAVER_MAX_SIZE_MB")
+        if max_size:
+            try:
+                kwargs["max_size_mb"] = float(max_size)
+            except ValueError:
+                pass
+        if os.environ.get("REPOREAVER_POLICY"):
+            kwargs["policy"] = os.environ["REPOREAVER_POLICY"]
+        if os.environ.get("REPOREAVER_QUICK"):
+            kwargs["quick_mode"] = True
+        if os.environ.get("REPOREAVER_NO_CACHE"):
+            kwargs["no_cache"] = True
+        feeds = os.environ.get("REPOREAVER_FEEDS_DIR")
+        if feeds:
+            kwargs["feeds_dir"] = Path(feeds)
+        history = os.environ.get("REPOREAVER_HISTORY_DIR")
+        if history:
+            kwargs["history_dir"] = Path(history)
+        return cls(**kwargs)
 
 
 def find_config(target_dir: Optional[Path] = None) -> Optional[Path]:

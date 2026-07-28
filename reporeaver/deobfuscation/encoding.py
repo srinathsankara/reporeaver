@@ -10,6 +10,8 @@ from typing import Optional
 
 log = logging.getLogger("reporeaver.deobfuscation.encoding")
 
+from ..utils.text import is_meaningful_text
+
 
 def try_decode(data: str, max_depth: int = 3) -> Optional[str]:
     """Recursively try to decode layered encodings."""
@@ -69,13 +71,4 @@ def decode_js_string(text: str) -> Optional[str]:
     return None
 
 
-def _is_meaningful(text: str) -> bool:
-    if len(text) < 5:
-        return False
-    printable = sum(1 for c in text if c.isprintable() and c.isascii())
-    if (printable / len(text)) < 0.7:
-        return False
-    space_count = text.count(" ")
-    if space_count == 0 and len(text) > 50 and all(c.isalpha() for c in text):
-        return False
-    return True
+_is_meaningful = is_meaningful_text
